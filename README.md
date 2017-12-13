@@ -1,6 +1,6 @@
-![LPP Campaign~](readme-header.png)
+![LPP Capped Milestones](readme-header.png)
 
-> Ethereum contract for liquid pledging capped milestons plugin
+> Ethereum contract for liquid pledging capped milestones plugin
 
 Welcome to the code for the capped milestones plugin for [liquid pledging](https://github.com/Giveth/liquidpledging). This contract sets the rules for capped milestones on the Giveth [dapp](https://github.com/Giveth/giveth-dapp).
 
