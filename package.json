@@ -1,0 +1,51 @@
+{
+    "name": "lpp-capped-milestone",
+    "version": "0.0.1",
+    "description": "Contract for generating capped milestones with reviewer for liquidpledging.",
+    "main": "index.js",
+    "directories": {
+        "lib": "lib"
+    },
+    "scripts": {
+        "test": "[ ! -d build ] && npm run sol-compile; mocha --harmony",
+        "sol-compile": "solcpiler",
+        "js-compile": "babel --source-maps -d lib/ js/",
+        "lint": "solium --dir contracts",
+        "compile": "npm run sol-compile; npm run js-compile",
+        "prepublish": "npm run compile"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/Giveth/lpp-capped-milestone.git"
+    },
+    "keywords": [
+        "liquid",
+        "pledging",
+        "ethereum",
+        "solidity",
+        "milestone"
+    ],
+    "author": "perissology",
+    "license": "GPL-3.0",
+    "bugs": {
+        "url": "https://github.com/Giveth/lpp-capped-milestones/issues"
+    },
+    "homepage": "https://github.com/Giveth/lpp-capped-milestones#readme",
+    "dependencies": {
+        "chai": "^4.1.2",
+        "eth-contract-class": "0.0.6",
+        "giveth-common-contracts": "0.4.0",
+        "liquidpledging": "git://github.com/giveth/liquidpledging.git#28313ee",
+        "minimetoken": "^0.2.0"
+    },
+    "devDependencies": {
+        "babel-cli": "^6.26.0",
+        "babel-preset-env": "^1.6.0",
+        "eslint": "^4.3.0",
+        "ethereumjs-testrpc": "git://github.com/perissology/ganache-cli.git#963aa7d",
+        "lerna": "^2.2.0",
+        "solcpiler": "0.0.10",
+        "solium": "^1.0.9",
+        "web3": "^1.0.0-beta.24"
+    }
+}

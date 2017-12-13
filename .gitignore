@@ -1,0 +1,10 @@
+build/
+lib/
+node_modules/
+.DS_Store
+
+.mypy_cache
+__pycache__
+
+.idea
+*.iml
