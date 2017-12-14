@@ -1,2 +1,2 @@
-exports.LPPCappedMilestones = require('./lib/LPPCappedMilestons');
-exports.LPPCappedMilestonesRuntimeByteCode = require('./build/LPPCappedMilestons.sol').LPPCappedMilestonesRuntimeByteCode;
+exports.LPPCappedMilestones = require('./lib/LPPCappedMilestones');
+exports.LPPCappedMilestonesRuntimeByteCode = require('./build/LPPCappedMilestones.sol').LPPCappedMilestonesRuntimeByteCode;
