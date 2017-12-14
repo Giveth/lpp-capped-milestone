@@ -30,7 +30,7 @@ contract LPPCappedMilestones is Escapable {
 
 
     event MilestoneAccepted(uint64 indexed idProject);
-    event PaymentCollected(uint64 indexed idProject, uint amount);
+    event PaymentCollected(uint64 indexed idProject);
 
     function LPPCappedMilestones(
         LiquidPledging _liquidPledging,
@@ -240,7 +240,7 @@ contract LPPCappedMilestones is Escapable {
             uint amount = m.canCollect;
             m.canCollect = 0;
             m.recipient.transfer(amount);
-            PaymentCollected(idProject, amount);
+            PaymentCollected(idProject);
         }
     }
 
