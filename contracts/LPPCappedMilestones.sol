@@ -240,8 +240,8 @@ contract LPPCappedMilestones is Escapable {
         require(msg.sender == m.recipient);
 
         if (m.canCollect > 0) {
-            // TODO should this assert be removed?
             uint amount = m.canCollect;
+            // TODO should this assert be removed?
             assert(this.balance >= amount);
             m.canCollect = 0;
             m.recipient.transfer(amount);
