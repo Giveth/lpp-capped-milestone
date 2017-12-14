@@ -22,12 +22,7 @@ import "giveth-common-contracts/contracts/Escapable.sol";
 
 
 contract LPPCappedMilestones is Escapable {
-    uint constant FROM_OWNER = 0;
-
-    uint constant FROM_INTENDEDPROJECT = 255;
-
     uint constant TO_OWNER = 256;
-
     uint constant TO_INTENDEDPROJECT = 511;
 
     LiquidPledging public liquidPledging;
@@ -48,6 +43,8 @@ contract LPPCappedMilestones is Escapable {
     event MilestoneAccepted(uint64 indexed idProject);
     event PaymentCollected(uint64 indexed idProject);
 
+    //== constructor
+
     function LPPCappedMilestones(
         LiquidPledging _liquidPledging,
         address _escapeHatchCaller,
@@ -63,21 +60,9 @@ contract LPPCappedMilestones is Escapable {
 
     //== external
 
-    /// @dev Plugins are used (much like web hooks) to initiate an action
-    ///  upon any donation, delegation, or transfer; this is an optional feature
-    ///  and allows for extreme customization of the contract
-    /// @dev Context The situation that is triggering the plugin:
-    ///  0 -> Plugin for the owner transferring pledge to another party
-    ///  1 -> Plugin for the first delegate transferring pledge to another party
-    ///  2 -> Plugin for the second delegate transferring pledge to another party
-    ///  ...
-    ///  255 -> Plugin for the intendedProject transferring pledge to another party
-    ///
-    ///  256 -> Plugin for the owner receiving pledge from another party
-    ///  257 -> Plugin for the first delegate receiving pledge from another party
-    ///  258 -> Plugin for the second delegate receiving pledge from another party
-    ///  ...
-    ///  511 -> Plugin for the intendedProject receiving pledge from another party
+    /// @dev this is called by liquidPledging before every transfer to and from
+    ///      a pledgeAdmin that has this contract as its plugin
+    /// @dev see ILiquidPledgingPlugin interface for details about context param
     function beforeTransfer(
         uint64 pledgeManager,
         uint64 pledgeFrom,
@@ -87,21 +72,22 @@ contract LPPCappedMilestones is Escapable {
     ) external returns (uint maxAllowed)
     {
         require(msg.sender == address(liquidPledging));
-        var (,,, fromIntendedProject,,,) = liquidPledging.getPledge(pledgeFrom);
-        var (, toOwner,, toIntendedProject,,, toPledgeState) = liquidPledging.getPledge(pledgeTo);
+        var (, , , fromIntendedProject, , ,) = liquidPledging.getPledge(pledgeFrom);
+        var (, toOwner, , toIntendedProject, , , toPledgeState) = liquidPledging.getPledge(pledgeTo);
         Milestone storage m;
 
-        // If it is proposed or comes from somewhere else of a proposed project, do not allow.
-        // only allow from the proposed project to the project in order normalize it.
-        // don't need to check if canceled b/c lp does this
+        // if m is the intendedProject, make sure m is still accepting funds (not accepted or canceled)
         if (context == TO_INTENDEDPROJECT) {
             m = milestones[toIntendedProject];
+            // don't need to check if canceled b/c lp does this
             if (m.accepted) {
                 return 0;
             }
+        // if the pledge is being transferred to m and is in the Pledged state, make
+        // sure m is still accepting funds (not accepted or canceled)
         } else if (context == TO_OWNER &&
-        (fromIntendedProject != toOwner &&
-        toPledgeState == LiquidPledgingBase.PledgeState.Pledged)) {
+            (fromIntendedProject != toOwner &&
+                toPledgeState == LiquidPledgingBase.PledgeState.Pledged)) {
             //TODO what if milestone isn't initialized? should we throw?
             // this can happen if someone adds a project through lp with this contracts address as the plugin
             // we can require(maxAmount > 0);
@@ -114,11 +100,9 @@ contract LPPCappedMilestones is Escapable {
         return amount;
     }
 
-    /// @dev Plugins are used (much like web hooks) to initiate an action
-    ///  upon any donation, delegation, or transfer; this is an optional feature
-    ///  and allows for extreme customization of the contract
-    /// @dev Context The situation that is triggering the plugin, see note for
-    ///  `beforeTransfer()`
+    /// @dev this is called by liquidPledging after every transfer to and from
+    ///      a pledgeAdmin that has this contract as its plugin
+    /// @dev see ILiquidPledgingPlugin interface for details about context param
     function afterTransfer(
         uint64 pledgeManager,
         uint64 pledgeFrom,
@@ -127,32 +111,37 @@ contract LPPCappedMilestones is Escapable {
         uint amount
     ) external
     {
-        uint returnFunds;
         require(msg.sender == address(liquidPledging));
 
-        var (, oldOwner,,,,,) = liquidPledging.getPledge(pledgeFrom);
-        var (, toOwner,,,,, toPledgeState) = liquidPledging.getPledge(pledgeTo);
+        var (, fromOwner, , , , ,) = liquidPledging.getPledge(pledgeFrom);
+        var (, toOwner, , , , , toPledgeState) = liquidPledging.getPledge(pledgeTo);
 
         if (context == TO_OWNER) {
             Milestone storage m;
 
-            // Recipient of the funds from a different owner
-            if (oldOwner != toOwner) {
+            // If fromOwner != toOwner, the means that a pledge is being committed to
+            // milestone m. We will accept any amount up to m.maxAmount, and return
+            // the rest
+            if (fromOwner != toOwner) {
                 m = milestones[toOwner];
+                uint returnFunds = 0;
 
                 m.received += amount;
+                // milestone is no longer accepting new funds
                 if (m.accepted) {
                     returnFunds = amount;
                 } else if (m.received > m.maxAmount) {
                     returnFunds = m.received - m.maxAmount;
-                } else {
-                    returnFunds = 0;
                 }
 
-                if (returnFunds > 0) {// Sends exceeding money back
+                // send any exceeding funds back
+                if (returnFunds > 0) {
                     m.received -= returnFunds;
                     liquidPledging.cancelPledge(pledgeTo, returnFunds);
                 }
+            // if the pledge has been paid, then the vault should have transferred the
+            // the funds to this contract. update the milestone with the amount the recipient
+            // can collect. this is the amount of the paid pledge
             } else if (toPledgeState == LiquidPledgingBase.PledgeState.Paid) {
                 m = milestones[toOwner];
                 m.canCollect += amount;
@@ -223,6 +212,7 @@ contract LPPCappedMilestones is Escapable {
         collect(idProject);
     }
 
+    /// Bit mask used for dividing pledge amounts in mWithdraw
     uint constant D64 = 0x10000000000000000;
 
     function mWithdraw(uint[] pledgesAmounts) public {
@@ -230,7 +220,7 @@ contract LPPCappedMilestones is Escapable {
 
         for (uint i = 0; i < pledgesAmounts.length; i++ ) {
             uint64 idPledge = uint64(pledgesAmounts[i] & (D64-1));
-            var (, idProject , , , , , ) = liquidPledging.getPledge(idPledge);
+            var (, idProject, , , , ,) = liquidPledging.getPledge(idPledge);
 
             mIds[i] = idProject;
             Milestone storage m = milestones[idProject];
@@ -251,8 +241,8 @@ contract LPPCappedMilestones is Escapable {
 
         if (m.canCollect > 0) {
             // TODO should this assert be removed?
-            assert(this.balance >= m.canCollect);
             uint amount = m.canCollect;
+            assert(this.balance >= amount);
             m.canCollect = 0;
             m.recipient.transfer(amount);
             PaymentCollected(idProject);
