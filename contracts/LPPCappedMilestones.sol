@@ -17,8 +17,9 @@ pragma solidity ^0.4.17;
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-import "liquidpledging/contracts/LiquidPledging.sol";
+import "giveth-liquidpledging-token/contracts/LiquidPledging.sol";
 import "giveth-common-contracts/contracts/Escapable.sol";
+import "giveth-common-contracts/contracts/ERC20.sol";
 
 
 contract LPPCappedMilestones is Escapable {
@@ -241,10 +242,11 @@ contract LPPCappedMilestones is Escapable {
 
         if (m.canCollect > 0) {
             uint amount = m.canCollect;
-            // TODO should this assert be removed?
-            assert(this.balance >= amount);
+            ERC20 token = ERC20(liquidPledging.token());
+
+            assert(token.balanceOf(this) >= amount);
             m.canCollect = 0;
-            m.recipient.transfer(amount);
+            require(token.transfer(m.recipient, amount));
             PaymentCollected(idProject);
         }
     }
