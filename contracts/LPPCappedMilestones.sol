@@ -23,6 +23,7 @@ import "giveth-common-contracts/contracts/ERC20.sol";
 import "minimetoken/contracts/MiniMeToken.sol";
 import "@aragon/os/contracts/acl/ACL.sol";
 import "@aragon/os/contracts/kernel/KernelProxy.sol";
+import "@aragon/os/contracts/kernel/Kernel.sol";
 
 
 /// @title LPPCappedMilestones
@@ -65,7 +66,7 @@ contract LPPCappedMilestones is EscapableApp, TokenController {
     address public recipient;
     address public newRecipient;
     address public campaignReviewer;
-    uint public maxAount;
+    uint public maxAmount;
     uint public received;
     uint public canCollect;
     bool public accepted;
@@ -83,13 +84,14 @@ contract LPPCappedMilestones is EscapableApp, TokenController {
     function initialize(
         string _name,
         string _url,        
-        address _liquidPledging
-        address _token        
-        address _escapeHatchDestination
-        address _reviewer
-        address _recipient
+        address _liquidPledging,
+        address _token,        
+        address _escapeHatchDestination,
+        address _reviewer,
+        address _campaignReviewer,
+        address _recipient,
         uint _maxAmount,
-        uint64 _parentProject,
+        uint64 _parentProject
     ) onlyInit external
     {
         super.initialize(_escapeHatchDestination);
@@ -101,10 +103,10 @@ contract LPPCappedMilestones is EscapableApp, TokenController {
         liquidPledging = LiquidPledging(_liquidPledging);
 
         idProject = liquidPledging.addProject(
-            name,
-            url,
+            _name,
+            _url,
             address(this),
-            parentProject,
+            _parentProject,
             0,
             ILiquidPledgingPlugin(this)
         );
@@ -114,7 +116,7 @@ contract LPPCappedMilestones is EscapableApp, TokenController {
         recipient = _recipient;
         maxAmount = _maxAmount;
         accepted = false;
-        canCollect = false;
+        canCollect = 0;
 
         campaignToken = MiniMeToken(_token);
     }
@@ -147,7 +149,7 @@ contract LPPCappedMilestones is EscapableApp, TokenController {
         newReviewer = _newReviewer;
     }    
 
-    function    () external {
+    function acceptNewReviewer() external {
         require(newReviewer == msg.sender);
 
         ACL acl = ACL(kernel.acl());
@@ -206,13 +208,10 @@ contract LPPCappedMilestones is EscapableApp, TokenController {
         var (, , , fromIntendedProject, , , ,) = liquidPledging.getPledge(pledgeFrom);
         var (, toOwner, , toIntendedProject, , , ,toPledgeState) = liquidPledging.getPledge(pledgeTo);
 
-        Milestone storage m;
-
         // if m is the intendedProject, make sure m is still accepting funds (not accepted or canceled)
         if (context == TO_INTENDEDPROJECT) {
-            m = milestones[toIntendedProject];
             // don't need to check if canceled b/c lp does this
-            if (m.accepted) {
+            if (accepted) {
                 return 0;
             }
         // if the pledge is being transferred to m and is in the Pledged state, make
@@ -224,8 +223,7 @@ contract LPPCappedMilestones is EscapableApp, TokenController {
             // this can happen if someone adds a project through lp with this contracts address as the plugin
             // we can require(maxAmount > 0);
             // don't need to check if canceled b/c lp does this
-            m = milestones[toOwner];
-            if (m.accepted) {
+            if (accepted) {
                 return 0;
             }
         }
@@ -250,34 +248,30 @@ contract LPPCappedMilestones is EscapableApp, TokenController {
         var (, toOwner, , , , , , toPledgeState) = liquidPledging.getPledge(pledgeTo);
 
         if (context == TO_OWNER) {
-            Milestone storage m;
-
             // If fromOwner != toOwner, the means that a pledge is being committed to
             // milestone m. We will accept any amount up to m.maxAmount, and return
             // the rest
             if (fromOwner != toOwner) {
-                m = milestones[toOwner];
                 uint returnFunds = 0;
 
-                m.received += amount;
+                received += amount;
                 // milestone is no longer accepting new funds
-                if (m.accepted) {
+                if (accepted) {
                     returnFunds = amount;
-                } else if (m.received > m.maxAmount) {
-                    returnFunds = m.received - m.maxAmount;
+                } else if (received > maxAmount) {
+                    returnFunds = received - maxAmount;
                 }
 
                 // send any exceeding funds back
                 if (returnFunds > 0) {
-                    m.received -= returnFunds;
+                    received -= returnFunds;
                     liquidPledging.cancelPledge(pledgeTo, returnFunds);
                 }
             // if the pledge has been paid, then the vault should have transferred the
             // the funds to this contract. update the milestone with the amount the recipient
             // can collect. this is the amount of the paid pledge
             } else if (toPledgeState == LiquidPledgingStorage.PledgeState.Paid) {
-                m = milestones[toOwner];
-                m.canCollect += amount;
+                canCollect += amount;
             }
         }
     }
@@ -342,75 +336,34 @@ contract LPPCappedMilestones is EscapableApp, TokenController {
     //     liquidPledging.cancelProject(idProject);
     // }
 
-    function withdraw(uint64 idProject, uint64 idPledge, uint amount) public {
-        require(_hasRole(RECIPIENT_ROLE));
-        require(accepted);
+    // function withdraw(uint64 idProject, uint64 idPledge, uint amount) public {
+    //     require(_hasRole(RECIPIENT_ROLE));
+    //     require(accepted);
 
-        // we don't check if canceled here.
-        // lp.withdraw will normalize the pledge & check if canceled
-        Milestone storage m = milestones[idProject];
+    //     // we don't check if canceled here.
+    //     // lp.withdraw will normalize the pledge & check if canceled
+    //     Milestone storage m = milestones[idProject];
 
-        liquidPledging.withdraw(idPledge, amount);
-        collect(idProject);
-    }
+    //     liquidPledging.withdraw(idPledge, amount);
+    //     collect(idProject);
+    // }
 
     /// Bit mask used for dividing pledge amounts in mWithdraw
     /// This is the multiple withdraw contract
 
-    // DO WE STILL NEED THIS???
-    uint constant D64 = 0x10000000000000000;
 
-    function mWithdraw(uint[] pledgesAmounts) public {
-        uint64[] memory mIds = new uint64[](pledgesAmounts.length);
+    // token should be param
+    function collect(uint64 idProject, address _token) public auth(RECIPIENT_ROLE){
+        if (canCollect > 0) {
+            uint amount = canCollect;
 
-        for (uint i = 0; i < pledgesAmounts.length; i++ ) {
-            uint64 idPledge = uint64(pledgesAmounts[i] & (D64-1));
-            var (, idProject, , , , , ,) = liquidPledging.getPledge(idPledge);
+            MiniMeToken milestoneToken = MiniMeToken(_token);
+            assert(milestoneToken.balanceOf(this) >= amount);
 
-            mIds[i] = idProject;
-            Milestone storage m = milestones[idProject];
-            require(msg.sender == m.recipient);
-            require(m.accepted);
-        }
+            canCollect = 0;
+            require(milestoneToken.transfer(recipient, amount));
 
-        liquidPledging.mWithdraw(pledgesAmounts);
-
-        for (i = 0; i < mIds.length; i++ ) {
-            collect(mIds[i]);
-        }
-    }
-
-    function collect(uint64 idProject) public {
-        require(_hasRole(RECIPIENT_ROLE));
-
-        Milestone storage m = milestones[idProject];
-
-        if (m.canCollect > 0) {
-            uint amount = m.canCollect;
-            ERC20 token = ERC20(liquidPledging.token());
-
-            assert(token.balanceOf(this) >= amount);
-            m.canCollect = 0;
-            require(token.transfer(m.recipient, amount));
             PaymentCollected(idProject);
         }
-    }
-
-    function getMilestone(uint64 idProject) public view returns (
-        uint maxAmount,
-        uint received,
-        uint canCollect,
-        address reviewer,
-        address campaignReviewer,
-        address recipient,
-        bool accepted
-    ) {
-        maxAmount = maxAmount;
-        received = received;
-        canCollect = canCollect;
-        reviewer = reviewer;
-        campaignReviewer = campaignReviewer;
-        recipient = recipient;
-        accepted = accepted;
     }
 }

@@ -92,18 +92,34 @@ describe('LPPCappedMilestones test', function() {
 
         // set permissions
         const kernel = new contracts.Kernel(web3, await liquidPledging.kernel());
-        // acl = new contracts.ACL(web3, await kernel.acl());
-        // await acl.createPermission(accounts[0], vault.$address, await vault.CANCEL_PAYMENT_ROLE(), accounts[0], { $extraGas: 200000 });
-        // await acl.createPermission(accounts[0], vault.$address, await vault.CONFIRM_PAYMENT_ROLE(), accounts[0], { $extraGas: 200000 });        
+        acl = new contracts.ACL(web3, await kernel.acl());
+        await acl.createPermission(accounts[0], vault.$address, await vault.CANCEL_PAYMENT_ROLE(), accounts[0], { $extraGas: 200000 });
+        await acl.createPermission(accounts[0], vault.$address, await vault.CONFIRM_PAYMENT_ROLE(), accounts[0], { $extraGas: 200000 });        
 
-        // giver1Token = await StandardTokenTest.new(web3);
-        // await giver1Token.mint(giver1, web3.utils.toWei('1000'));
-        // await giver1Token.approve(liquidPledging.$address, "0xFFFFFFFFFFFFFFFF", { from: giver1 });
+        donor1Token = await StandardTokenTest.new(web3);
+        await donor1Token.mint(donor1, web3.utils.toWei('1000'));
+        await donor1Token.approve(liquidPledging.$address, "0xFFFFFFFFFFFFFFFF", { from: donor1 });
 
-        // const codeHash = web3.utils.keccak256(LPPCappedMilestonesRuntimeByteCode);
-        // await liquidPledging.addValidPlugin(codeHash);
+        const tokenFactory = await MiniMeTokenFactory.new(web3, { gas: 3000000 });
+        factory = await contracts.LPPCappedMilestoneFactory.new(web3, kernel.$address, tokenFactory.$address, accounts[0], accounts[1], { gas: 6000000 });
+        await acl.grantPermission(factory.$address, acl.$address, await acl.CREATE_PERMISSIONS_ROLE(), { $extraGas: 200000 });
+        await acl.grantPermission(factory.$address, liquidPledging.$address, await liquidPledging.PLUGIN_MANAGER_ROLE(), { $extraGas: 200000 });
 
-        // milestones = await LPPCappedMilestones.new(web3, liquidPledging.$address, accounts[0], accounts[1]);
+        const milestoneApp = await contracts.LPPCappedMilestone.new(web3);
+        await kernel.setApp(await kernel.APP_BASES_NAMESPACE(), await factory.MILESTONE_APP_ID(), milestoneApp.$address, { $extraGas: 200000 });
+
+        // await factory.newMilestone('Milestone 1', 'URL1', 0, reviewer1, 'Milestone 1 Token', 'CPG', accounts[0], accounts[1], { from: campaignOwner1 });
+
+        // const lpState = await liquidPledgingState.getState();
+        // assert.equal(lpState.admins.length, 2);
+        // const lpManager = lpState.admins[1];
+
+        // campaign = new contracts.LPPCampaign(web3, lpManager.plugin);
+        // campaignState = new LPPCampaignState(campaign);
+
+        // minime = new MiniMeToken(web3, await campaign.campaignToken());
+        // minimeTokenState = new MiniMeTokenState(minime);
+
     });
 
     // it('Should create new milestone', async() => {
