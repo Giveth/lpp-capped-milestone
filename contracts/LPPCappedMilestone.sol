@@ -57,48 +57,24 @@ contract LPPCappedMilestone is EscapableApp, TokenController {
     address public campaignReviewer;
     uint public maxAmount;
     uint public received;
-    uint public canCollect;
     bool public accepted;
 
-    // first param should be liquidpledging address
-    event MilestoneAccepted(uint64 indexed idProject);
-    event PaymentCollected(uint64 indexed idProject);
+    bool public LPinitialized = false;
+
+    event MilestoneAccepted(address indexed liquidPledging, uint64 indexed idProject);
+    event PaymentCollected(address indexed liquidPledging, uint64 indexed idProject);
+
+    function LPPCappedMilestone(address _escapeHatchDestination) EscapableApp(_escapeHatchDestination) public {}
 
     //== constructor
 
-   function initialize(address _escapeHatchDestination) onlyInit public {
+    function initialize(address _escapeHatchDestination) onlyInit public {
         require(false); // overload the EscapableApp
         _escapeHatchDestination;
     }
 
-    function initialize(
-        address _token,        
-        address _escapeHatchDestination,
-        address _reviewer,
-        address _campaignReviewer,
-        address _recipient,
-        uint _maxAmount
-    ) onlyInit external
-    {
-        // try moving return to see if the stack fails
-        // initialize 1
-        // initialize 2, then call super.initalize
-        super.initialize(_escapeHatchDestination);
-
-        require(_recipient != 0);
-        require(_reviewer != 0);
-        require(_campaignReviewer != 0);
-
-        reviewer = _reviewer;
-        campaignReviewer = _campaignReviewer;
-        recipient = _recipient;
-        maxAmount = _maxAmount;
-        accepted = false;
-        canCollect = 0;
-
-        campaignToken = MiniMeToken(_token);
-    }
-
+    // @notice we split the initialization because it was throwing stack too deep error
+    //  initializes LP, this needs to be called first
     function initializeLP(
         string _name,
         string _url,        
@@ -116,30 +92,68 @@ contract LPPCappedMilestone is EscapableApp, TokenController {
             _parentProject,
             0,
             ILiquidPledgingPlugin(this)
-        );        
+        );  
+
+        LPinitialized = true;      
     }
 
-    function acceptMilestone(uint64 idProject) public {
-        require(_hasRole(ADMIN_ROLE) || _hasRole(REVIEWER_ROLE));
-        require(!isCanceled());
+    // initializes everything else
+    function initialize(
+        address _token,        
+        address _escapeHatchDestination,
+        address _reviewer,
+        address _campaignReviewer,
+        address _recipient,
+        uint _maxAmount
+    ) onlyInit external
+    {
+        require(_recipient != 0);
+        require(_reviewer != 0);
+        require(_campaignReviewer != 0);
 
-        accepted = true;
-        MilestoneAccepted(idProject);
+        // LP needs to be initialized first
+        // This is to avoid stack too deep errors
+        // and avoid calling super.initialize too soon
+        require(LPinitialized);
+
+        super.initialize(_escapeHatchDestination);
+
+        reviewer = _reviewer;
+        campaignReviewer = _campaignReviewer;
+        recipient = _recipient;
+        maxAmount = _maxAmount;
+        accepted = false;
+
+        campaignToken = MiniMeToken(_token);
     }
 
-    function cancelMilestone(uint64 idProject) public {
-        require(_hasRole(ADMIN_ROLE) || _hasRole(REVIEWER_ROLE));
-        require(!isCanceled());
 
-        liquidPledging.cancelProject(idProject);
-    }    
+
+    //== internal
+
+    function _hasRole(bytes32 role) internal returns(bool) {
+      return canPerform(msg.sender, role, new uint[](0));
+    }        
+
+    //== external
 
     function isCanceled() public constant returns (bool) {
         return liquidPledging.isProjectCanceled(idProject);
     }
 
-    function _hasRole(bytes32 role) internal returns(bool) {
-      return canPerform(msg.sender, role, new uint[](0));
+    function acceptMilestone(uint64 idProject) external {
+        require(_hasRole(ADMIN_ROLE) || _hasRole(REVIEWER_ROLE));
+        require(!isCanceled());
+
+        accepted = true;
+        MilestoneAccepted(liquidPledging, idProject);
+    }
+
+    function cancelMilestone(uint64 idProject) external {
+        require(_hasRole(ADMIN_ROLE) || _hasRole(REVIEWER_ROLE));
+        require(!isCanceled());
+
+        liquidPledging.cancelProject(idProject);
     }    
 
 
@@ -173,23 +187,6 @@ contract LPPCappedMilestone is EscapableApp, TokenController {
         newRecipient = 0;
     }     
 
-
-
-    // function LPPCappedMilestones(
-    //     LiquidPledging _liquidPledging,
-    //     address _escapeHatchCaller,
-    //     address _escapeHatchDestination
-    // ) Escapable(_escapeHatchCaller, _escapeHatchDestination) public
-    // {
-    //     liquidPledging = _liquidPledging;
-    // }
-
-    // //== fallback
-
-    // function() payable {}
-
-    //== external
-
     /// @dev this is called by liquidPledging before every transfer to and from
     ///      a pledgeAdmin that has this contract as its plugin
     /// @dev see ILiquidPledgingPlugin interface for details about context param
@@ -204,7 +201,7 @@ contract LPPCappedMilestone is EscapableApp, TokenController {
     {
         require(msg.sender == address(liquidPledging));
         var (, , , fromIntendedProject, , , ,) = liquidPledging.getPledge(pledgeFrom);
-        var (, toOwner, , toIntendedProject, , , ,toPledgeState) = liquidPledging.getPledge(pledgeTo);
+        var (, toOwner, , , , , ,toPledgeState) = liquidPledging.getPledge(pledgeTo);
 
         // if m is the intendedProject, make sure m is still accepting funds (not accepted or canceled)
         if (context == TO_INTENDEDPROJECT) {
@@ -242,12 +239,8 @@ contract LPPCappedMilestone is EscapableApp, TokenController {
     {
         require(msg.sender == address(liquidPledging));
 
-        // 
-        // this.balance just shows what's in the contract
-        // 
-
         var (, fromOwner, , , , , ,) = liquidPledging.getPledge(pledgeFrom);
-        var (, toOwner, , , , , , toPledgeState) = liquidPledging.getPledge(pledgeTo);
+        var (, toOwner, , , , , , ) = liquidPledging.getPledge(pledgeTo);
 
         if (context == TO_OWNER) {
             // If fromOwner != toOwner, the means that a pledge is being committed to
@@ -255,18 +248,17 @@ contract LPPCappedMilestone is EscapableApp, TokenController {
             // the rest
             if (fromOwner != toOwner) {
                 uint returnFunds = 0;
+                uint newBalance = this.balance + amount;
 
-                received += amount;
                 // milestone is no longer accepting new funds
                 if (accepted) {
                     returnFunds = amount;
-                } else if (received > maxAmount) {
-                    returnFunds = received - maxAmount;
+                } else if (newBalance > maxAmount) {
+                    returnFunds = newBalance - maxAmount;
                 }
 
                 // send any exceeding funds back
                 if (returnFunds > 0) {
-                    received -= returnFunds;
                     liquidPledging.cancelPledge(pledgeTo, returnFunds);
                 }
             }
@@ -280,84 +272,14 @@ contract LPPCappedMilestone is EscapableApp, TokenController {
         liquidPledging.cancelProject(idProject);
     }
 
-
-    //== public
-
-    // function addMilestone(
-    //     string name,
-    //     string url,
-    //     uint _maxAmount,
-    //     uint64 parentProject,
-    //     address _recipient,
-    //     address _reviewer,
-    //     address _campaignReviewer
-    // ) public
-    // {
-    //     uint64 idProject = liquidPledging.addProject(
-    //         name,
-    //         url,
-    //         address(this),
-    //         parentProject,
-    //         uint64(0),
-    //         ILiquidPledgingPlugin(this)
-    //     );
-
-    //     milestones[idProject] = Milestone(
-    //         _maxAmount,
-    //         0,
-    //         0,
-    //         _reviewer,
-    //         _campaignReviewer,
-    //         _recipient,
-    //         false
-    //     );
-    // }
-
-    // function acceptMilestone(uint64 idProject) public {
-    //     bool isCanceled = liquidPledging.isProjectCanceled(idProject);
-    //     require(!isCanceled);
-
-    //     Milestone storage m = milestones[idProject];
-    //     require(msg.sender == m.reviewer || msg.sender == m.campaignReviewer);
-    //     require(!m.accepted);
-
-    //     m.accepted = true;
-    //     MilestoneAccepted(idProject);
-    // }
-
-    // function cancelMilestone(uint64 idProject) public {
-    //     Milestone storage m = milestones[idProject];
-    //     require(msg.sender == m.reviewer || msg.sender == m.campaignReviewer);
-    //     require(!m.accepted);
-
-    //     liquidPledging.cancelProject(idProject);
-    // }
-
-    // function withdraw(uint64 idProject, uint64 idPledge, uint amount) public {
-    //     require(_hasRole(RECIPIENT_ROLE));
-    //     require(accepted);
-
-    //     // we don't check if canceled here.
-    //     // lp.withdraw will normalize the pledge & check if canceled
-    //     Milestone storage m = milestones[idProject];
-
-    //     liquidPledging.withdraw(idPledge, amount);
-    //     collect(idProject);
-    // }
-
-    /// Bit mask used for dividing pledge amounts in mWithdraw
-    /// This is the multiple withdraw contract
-
-
-    // token should be param
-    function collect(uint64 idProject, address _token) public auth(RECIPIENT_ROLE){
-        uint amount = canCollect;
+    function collect(uint64 idProject, address _token) external auth(RECIPIENT_ROLE){
+        uint amount = this.balance;
 
         ERC20 milestoneToken = ERC20(_token);
         assert(milestoneToken.balanceOf(this) >= amount);
 
         require(milestoneToken.transfer(recipient, amount));
 
-        PaymentCollected(idProject);
+        PaymentCollected(liquidPledging, idProject);
     }
 }

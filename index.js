@@ -1,2 +1,3 @@
-exports.LPPCappedMilestone = require('./lib/LPPCappedMilestone');
-exports.LPPCappedMilestoneRuntimeByteCode = require('./build/LPPCappedMilestone.sol').LPPCappedMilestoneRuntimeByteCode;
+const contracts = require('./build/contracts');
+exports.LPPCappedMilestone = contracts.LPPCappedMilestone;
+exports.LPPCappedMilestoneFactory = contracts.LPPCappedMilestoneFactory;
