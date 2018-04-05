@@ -25,7 +25,7 @@ const printBalances = async(liquidPledging) => {
 };
 
 
-describe('LPPCappedMilestones test', function() {
+describe('LPPCappedMilestone test', function() {
     this.timeout(0);
 
     let testrpc;
@@ -76,8 +76,8 @@ describe('LPPCappedMilestones test', function() {
     });
 
     it('Should deploy LiquidPledging contract', async() => {
-        const baseVault = await LPVault.new(web3);
-        const baseLP = await LiquidPledging.new(web3);
+        const baseVault = await LPVault.new(web3, accounts[0]);
+        const baseLP = await LiquidPledging.new(web3, accounts[0]);
         const lpFactory = await LPFactory.new(web3, baseVault.$address, baseLP.$address);
 
         const r = await lpFactory.newLP(accounts[0], accounts[1], { $extraGas: 200000 });

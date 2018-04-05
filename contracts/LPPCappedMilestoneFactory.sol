@@ -1,6 +1,6 @@
 pragma solidity ^0.4.18;
 
-import "./LPPCappedMilestones.sol";
+import "./LPPCappedMilestone.sol";
 import "minimetoken/contracts/MiniMeToken.sol";
 import "@aragon/os/contracts/factory/AppProxyFactory.sol";
 import "@aragon/os/contracts/kernel/Kernel.sol";
@@ -8,7 +8,7 @@ import "giveth-liquidpledging/contracts/LiquidPledging.sol";
 import "giveth-liquidpledging/contracts/LPConstants.sol";
 import "giveth-common-contracts/contracts/Escapable.sol";
 
-contract LPPCappedMilestonesFactory is LPConstants, Escapable, AppProxyFactory {
+contract LPPCappedMilestoneFactory is LPConstants, Escapable, AppProxyFactory {
     Kernel public kernel;
     MiniMeTokenFactory public tokenFactory;
 
@@ -18,7 +18,7 @@ contract LPPCappedMilestonesFactory is LPConstants, Escapable, AppProxyFactory {
 
     event DeployCampaign(address milestone);
 
-    function LPPCappedMilestonesFactory(address _kernel, address _tokenFactory, address _escapeHatchCaller, address _escapeHatchDestination)
+    function LPPCappedMilestoneFactory(address _kernel, address _tokenFactory, address _escapeHatchCaller, address _escapeHatchDestination)
         Escapable(_escapeHatchCaller, _escapeHatchDestination) public
     {
         // note: this contract will need CREATE_PERMISSIONS_ROLE on the ACL
@@ -52,21 +52,20 @@ contract LPPCappedMilestonesFactory is LPConstants, Escapable, AppProxyFactory {
 
         // TODO: could make MiniMeToken an AragonApp to save gas by deploying a proxy
         address token = new MiniMeToken(tokenFactory, 0x0, 0, tokenName, 18, tokenSymbol, false);
-        LPPCappedMilestones milestone = LPPCappedMilestones(newAppProxy(kernel, MILESTONE_APP_ID));
 
         LiquidPledging(liquidPledging).addValidPluginInstance(address(milestone));
 
-        milestone.initialize(name, url, liquidPledging, token, escapeHatchDestination, reviewer, campaignReviewer, recipient, maxAmount, parentProject);
+        LPPCappedMilestone milestone = _init(name, url, parentProject, reviewer, escapeHatchDestination, recipient, campaignReviewer, maxAmount, liquidPledging, token);
+
         MiniMeToken(token).changeController(address(milestone));
 
-        _setPermissions(milestone, liquidPledging, reviewer, recipient, escapeHatchCaller);
+        _setPermissions(milestone, reviewer, recipient, escapeHatchCaller);
 
         DeployCampaign(address(milestone));
     }
 
     function _setPermissions(
-        LPPCappedMilestones milestone,
-        address liquidPledging,
+        LPPCappedMilestone milestone,
         address reviewer,
         address recipient,
         address escapeHatchCaller
@@ -78,16 +77,31 @@ contract LPPCappedMilestonesFactory is LPConstants, Escapable, AppProxyFactory {
         bytes32 reviewerRole = milestone.REVIEWER_ROLE();
         bytes32 recipientRole = milestone.RECIPIENT_ROLE();
         bytes32 adminRole = milestone.ADMIN_ROLE();
-        // bytes32 transferRole = milestone.TRANSFER_ROLE();
-        // bytes32 acceptTransferRole = milestone.ACCEPT_TRANSFER_ROLE();
 
         acl.createPermission(reviewer, address(milestone), reviewerRole, address(milestone));
         acl.createPermission(recipient, address(milestone), recipientRole, address(milestone));
-        // acl.createPermission(liquidPledging, address(milestone), acceptTransferRole, address(milestone));
-        // this permission is managed by the escapeHatchCaller
         acl.createPermission(escapeHatchCaller, address(milestone), hatchCallerRole, escapeHatchCaller);
-        // these 2 permissions are managed by msg.sender
         acl.createPermission(msg.sender, address(milestone), adminRole, msg.sender);
-        // acl.createPermission(msg.sender, address(milestone), transferRole, msg.sender);
+    }
+
+    function _init(
+        string name,
+        string url,
+        uint64 parentProject,
+        address reviewer,
+        address escapeHatchDestination,
+        address recipient,
+        address campaignReviewer,
+        uint maxAmount,
+        address liquidPledging,
+        address token
+    ) internal returns (LPPCappedMilestone)
+    {
+        LPPCappedMilestone milestone = LPPCappedMilestone(newAppProxy(kernel, MILESTONE_APP_ID));
+
+        milestone.initializeLP(name, url, liquidPledging, parentProject);
+        milestone.initialize(token, escapeHatchDestination, reviewer, campaignReviewer, recipient, maxAmount);
+
+        return milestone;
     }
 }

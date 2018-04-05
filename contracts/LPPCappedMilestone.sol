@@ -26,9 +26,9 @@ import "@aragon/os/contracts/kernel/KernelProxy.sol";
 import "@aragon/os/contracts/kernel/Kernel.sol";
 
 
-/// @title LPPCappedMilestones
+/// @title LPPCappedMilestone
 /// @author RJ Ewing<perissology@protonmail.com>
-/// @notice The LPPCappedMilestones contract is a plugin contract for liquidPledging,
+/// @notice The LPPCappedMilestone contract is a plugin contract for liquidPledging,
 ///  extending the functionality of a liquidPledging project. This contract
 ///  prevents withdrawals from any pledges this contract is the owner of.
 ///  This contract has 4 roles. The admin, a reviewer, and a recipient role. 
@@ -38,7 +38,7 @@ import "@aragon/os/contracts/kernel/Kernel.sol";
 ///  2. The reviewer can cancel the milestone. 
 ///  3. The recipient role will receive the pledge's owned by this milestone. 
 
-contract LPPCappedMilestones is EscapableApp, TokenController {
+contract LPPCappedMilestone is EscapableApp, TokenController {
     uint constant TO_OWNER = 256;
     uint constant TO_INTENDEDPROJECT = 511;
 
@@ -50,17 +50,6 @@ contract LPPCappedMilestones is EscapableApp, TokenController {
     LiquidPledging public liquidPledging;
     uint64 public idProject;
 
-    struct Milestone {
-        uint maxAmount;
-        uint received;
-        uint canCollect;
-        address reviewer;
-        address campaignReviewer;
-        address recipient;
-        bool accepted;
-    }
-
-    mapping (uint64 => Milestone) milestones;
     address public reviewer;
     address public newReviewer;    
     address public recipient;
@@ -71,6 +60,7 @@ contract LPPCappedMilestones is EscapableApp, TokenController {
     uint public canCollect;
     bool public accepted;
 
+    // first param should be liquidpledging address
     event MilestoneAccepted(uint64 indexed idProject);
     event PaymentCollected(uint64 indexed idProject);
 
@@ -82,34 +72,22 @@ contract LPPCappedMilestones is EscapableApp, TokenController {
     }
 
     function initialize(
-        string _name,
-        string _url,        
-        address _liquidPledging,
         address _token,        
         address _escapeHatchDestination,
         address _reviewer,
         address _campaignReviewer,
         address _recipient,
-        uint _maxAmount,
-        uint64 _parentProject
+        uint _maxAmount
     ) onlyInit external
     {
+        // try moving return to see if the stack fails
+        // initialize 1
+        // initialize 2, then call super.initalize
         super.initialize(_escapeHatchDestination);
-        require(_liquidPledging != 0);
+
+        require(_recipient != 0);
         require(_reviewer != 0);
         require(_campaignReviewer != 0);
-        require(_recipient != 0);
-
-        liquidPledging = LiquidPledging(_liquidPledging);
-
-        idProject = liquidPledging.addProject(
-            _name,
-            _url,
-            address(this),
-            _parentProject,
-            0,
-            ILiquidPledgingPlugin(this)
-        );
 
         reviewer = _reviewer;
         campaignReviewer = _campaignReviewer;
@@ -119,6 +97,26 @@ contract LPPCappedMilestones is EscapableApp, TokenController {
         canCollect = 0;
 
         campaignToken = MiniMeToken(_token);
+    }
+
+    function initializeLP(
+        string _name,
+        string _url,        
+        address _liquidPledging,
+        uint64 _parentProject
+    ) onlyInit external
+    {
+        require(_liquidPledging != 0);        
+        liquidPledging = LiquidPledging(_liquidPledging);
+
+        idProject = liquidPledging.addProject(
+            _name,
+            _url,
+            address(this),
+            _parentProject,
+            0,
+            ILiquidPledgingPlugin(this)
+        );        
     }
 
     function acceptMilestone(uint64 idProject) public {
@@ -162,7 +160,7 @@ contract LPPCappedMilestones is EscapableApp, TokenController {
     
     function changeRecipient(address _newRecipient) external auth(REVIEWER_ROLE) {
         newRecipient = _newRecipient;
-    }    
+    }
 
     function acceptNewRecipient() external {
         require(newRecipient == msg.sender);
@@ -244,6 +242,10 @@ contract LPPCappedMilestones is EscapableApp, TokenController {
     {
         require(msg.sender == address(liquidPledging));
 
+        // 
+        // this.balance just shows what's in the contract
+        // 
+
         var (, fromOwner, , , , , ,) = liquidPledging.getPledge(pledgeFrom);
         var (, toOwner, , , , , , toPledgeState) = liquidPledging.getPledge(pledgeTo);
 
@@ -267,11 +269,6 @@ contract LPPCappedMilestones is EscapableApp, TokenController {
                     received -= returnFunds;
                     liquidPledging.cancelPledge(pledgeTo, returnFunds);
                 }
-            // if the pledge has been paid, then the vault should have transferred the
-            // the funds to this contract. update the milestone with the amount the recipient
-            // can collect. this is the amount of the paid pledge
-            } else if (toPledgeState == LiquidPledgingStorage.PledgeState.Paid) {
-                canCollect += amount;
             }
         }
     }
@@ -354,16 +351,13 @@ contract LPPCappedMilestones is EscapableApp, TokenController {
 
     // token should be param
     function collect(uint64 idProject, address _token) public auth(RECIPIENT_ROLE){
-        if (canCollect > 0) {
-            uint amount = canCollect;
+        uint amount = canCollect;
 
-            MiniMeToken milestoneToken = MiniMeToken(_token);
-            assert(milestoneToken.balanceOf(this) >= amount);
+        ERC20 milestoneToken = ERC20(_token);
+        assert(milestoneToken.balanceOf(this) >= amount);
 
-            canCollect = 0;
-            require(milestoneToken.transfer(recipient, amount));
+        require(milestoneToken.transfer(recipient, amount));
 
-            PaymentCollected(idProject);
-        }
+        PaymentCollected(idProject);
     }
 }
