@@ -20,7 +20,6 @@ pragma solidity ^0.4.17;
 import "giveth-liquidpledging/contracts/LiquidPledging.sol";
 import "giveth-liquidpledging/contracts/EscapableApp.sol";
 import "giveth-common-contracts/contracts/ERC20.sol";
-import "minimetoken/contracts/MiniMeToken.sol";
 import "@aragon/os/contracts/acl/ACL.sol";
 import "@aragon/os/contracts/kernel/KernelProxy.sol";
 import "@aragon/os/contracts/kernel/Kernel.sol";
@@ -38,7 +37,7 @@ import "@aragon/os/contracts/kernel/Kernel.sol";
 ///  2. The reviewer can cancel the milestone. 
 ///  3. The recipient role will receive the pledge's owned by this milestone. 
 
-contract LPPCappedMilestone is EscapableApp, TokenController {
+contract LPPCappedMilestone is EscapableApp {
     uint constant TO_OWNER = 256;
     uint constant TO_INTENDEDPROJECT = 511;
 
@@ -46,7 +45,6 @@ contract LPPCappedMilestone is EscapableApp, TokenController {
     bytes32 public constant REVIEWER_ROLE = keccak256("REVIEWER_ROLE");
     bytes32 public constant RECIPIENT_ROLE = keccak256("RECIPIENT_ROLE");
 
-    MiniMeToken public campaignToken;
     LiquidPledging public liquidPledging;
     uint64 public idProject;
 
@@ -56,7 +54,7 @@ contract LPPCappedMilestone is EscapableApp, TokenController {
     address public newRecipient;
     address public campaignReviewer;
     uint public maxAmount;
-    uint public received;
+    uint public received = 0;
     bool public accepted;
 
     bool public LPinitialized = false;
@@ -99,7 +97,6 @@ contract LPPCappedMilestone is EscapableApp, TokenController {
 
     // initializes everything else
     function initialize(
-        address _token,        
         address _escapeHatchDestination,
         address _reviewer,
         address _campaignReviewer,
@@ -123,8 +120,6 @@ contract LPPCappedMilestone is EscapableApp, TokenController {
         recipient = _recipient;
         maxAmount = _maxAmount;
         accepted = false;
-
-        campaignToken = MiniMeToken(_token);
     }
 
 
@@ -248,13 +243,15 @@ contract LPPCappedMilestone is EscapableApp, TokenController {
             // the rest
             if (fromOwner != toOwner) {
                 uint returnFunds = 0;
-                uint newBalance = this.balance + amount;
+                uint newBalance = received + amount;
 
                 // milestone is no longer accepting new funds
                 if (accepted) {
                     returnFunds = amount;
                 } else if (newBalance > maxAmount) {
                     returnFunds = newBalance - maxAmount;
+                } else {
+                    received = received + amount;
                 }
 
                 // send any exceeding funds back

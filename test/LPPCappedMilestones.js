@@ -33,24 +33,29 @@ describe('LPPCappedMilestone test', function() {
     let accounts;
     let liquidPledging;
     let liquidPledgingState;
+    let kernel;
     let vault;
     let milestones;
-    let donor1;
-    let donor2;
+    let escapeHatchCaller;
+    let escapeHatchDestination;
+    let lpManager;
+    let giver1;
+    let giver2;
     let delegate1;
-    let adminMilestone1;
+    let milestoneOwner1;
     let recipient1;
     let recipient2;
     let reviewer1;
     let reviewer2;
     let campaignReviewer1;
     let campaignReviewer2;
+    let maxAmount = 100;
 
     before(async() => {
         testrpc = TestRPC.server({
             ws: true,
             gasLimit: 9700000,
-            total_accounts: 10,
+            total_accounts: 11,
         });
 
         testrpc.listen(8545, '127.0.0.1', (err) => { });
@@ -58,16 +63,17 @@ describe('LPPCappedMilestone test', function() {
         web3 = new Web3('ws://localhost:8545');
         accounts = await web3.eth.getAccounts();
 
-        donor1 = accounts[1];
-        donor2 = accounts[2];
-        delegate1 = accounts[2];
-        adminMilestone1 = accounts[3];
-        recipient1 = accounts[4];
-        reviewer1 = accounts[5];
-        campaignReviewer1 = accounts[6];
-        recipient2 = accounts[7];
-        reviewer2 = accounts[8];
-        campaignReviewer2 = accounts[9];
+        escapeHatchCaller = accounts[0]
+        escapeHatchDestination = accounts[1]
+        giver1 = accounts[2]
+        giver2 = accounts[3];
+        milestoneOwner1 = accounts[4];
+        recipient1 = accounts[5];
+        reviewer1 = accounts[6];
+        campaignReviewer1 = accounts[7];
+        recipient2 = accounts[8];
+        reviewer2 = accounts[9];
+        campaignReviewer2 = accounts[10];
     });
 
     after((done) => {
@@ -91,107 +97,97 @@ describe('LPPCappedMilestone test', function() {
         liquidPledgingState = new LiquidPledgingState(liquidPledging);
 
         // set permissions
-        const kernel = new contracts.Kernel(web3, await liquidPledging.kernel());
+        kernel = new contracts.Kernel(web3, await liquidPledging.kernel());
         acl = new contracts.ACL(web3, await kernel.acl());
         await acl.createPermission(accounts[0], vault.$address, await vault.CANCEL_PAYMENT_ROLE(), accounts[0], { $extraGas: 200000 });
         await acl.createPermission(accounts[0], vault.$address, await vault.CONFIRM_PAYMENT_ROLE(), accounts[0], { $extraGas: 200000 });        
 
-        donor1Token = await StandardTokenTest.new(web3);
-        await donor1Token.mint(donor1, web3.utils.toWei('1000'));
-        await donor1Token.approve(liquidPledging.$address, "0xFFFFFFFFFFFFFFFF", { from: donor1 });
+        // generate token for Giver
+        giver1Token = await StandardTokenTest.new(web3);
+        await giver1Token.mint(giver1, web3.utils.toWei('1000'));
+        await giver1Token.approve(liquidPledging.$address, "0xFFFFFFFFFFFFFFFF", { from: giver1 });
 
-        const tokenFactory = await MiniMeTokenFactory.new(web3, { gas: 3000000 });
-        factory = await contracts.LPPCappedMilestoneFactory.new(web3, kernel.$address, tokenFactory.$address, accounts[0], accounts[1], { gas: 6000000 });
+        factory = await contracts.LPPCappedMilestoneFactory.new(web3, kernel.$address, escapeHatchCaller, giver1, { gas: 6000000 });
         await acl.grantPermission(factory.$address, acl.$address, await acl.CREATE_PERMISSIONS_ROLE(), { $extraGas: 200000 });
         await acl.grantPermission(factory.$address, liquidPledging.$address, await liquidPledging.PLUGIN_MANAGER_ROLE(), { $extraGas: 200000 });
 
-        const milestoneApp = await contracts.LPPCappedMilestone.new(web3);
+        const milestoneApp = await contracts.LPPCappedMilestone.new(web3, escapeHatchCaller);
         await kernel.setApp(await kernel.APP_BASES_NAMESPACE(), await factory.MILESTONE_APP_ID(), milestoneApp.$address, { $extraGas: 200000 });
 
-        // await factory.newMilestone('Milestone 1', 'URL1', 0, reviewer1, 'Milestone 1 Token', 'CPG', accounts[0], accounts[1], { from: campaignOwner1 });
+        await factory.newMilestone(
+            'Milestone 1', 
+            'URL1', 
+            0, 
+            reviewer1, 
+            escapeHatchCaller, 
+            giver1, 
+            recipient1, 
+            campaignReviewer1, 
+            maxAmount, 
+            { from: milestoneOwner1 }
+        );
 
-        // const lpState = await liquidPledgingState.getState();
-        // assert.equal(lpState.admins.length, 2);
-        // const lpManager = lpState.admins[1];
+        const lpState = await liquidPledgingState.getState();
+        assert.equal(lpState.admins.length, 2);
+        lpManager = lpState.admins[1];        
 
-        // campaign = new contracts.LPPCampaign(web3, lpManager.plugin);
-        // campaignState = new LPPCampaignState(campaign);
+        milestone = new contracts.LPPCappedMilestone(web3, lpManager.plugin);
 
-        // minime = new MiniMeToken(web3, await campaign.campaignToken());
-        // minimeTokenState = new MiniMeTokenState(minime);
-
+        assert.equal(lpManager.type, 'Project');
+        assert.equal(lpManager.addr, milestone.$address);
+        assert.equal(lpManager.name, 'Milestone 1');
+        assert.equal(lpManager.commitTime, '0');
+        assert.equal(lpManager.canceled, false);
     });
 
-    // it('Should create new milestone', async() => {
-    //     await milestones.addMilestone('Milestone1', '', 1000, 0, recipient1, reviewer1, campaignReviewer1); // pledgeAdmin 1
 
-    //     const nManagers = await liquidPledging.numberOfPledgeAdmins();
-    //     assert.equal(nManagers, 1);
+    it('Should have initialized a milestone correctly', async() => {
+        const mReviewer = await milestone.reviewer();
+        const mCampaignReviewer = await milestone.campaignReviewer();
+        const mRecipient = await milestone.recipient();
+        const mMaxAmount = await milestone.maxAmount();
+        const mAccepted = await milestone.accepted();
+        const LPinitialized = await milestone.LPinitialized();
 
-    //     const res = await liquidPledging.getPledgeAdmin(1);
-    //     assert.equal(res.adminType, 2); // Project
-    //     assert.equal(res.addr, milestones.$address);
-    //     assert.equal(res.name, 'Milestone1');
-    //     assert.equal(res.url, '');
-    //     assert.equal(res.commitTime, 0);
-    //     assert.equal(res.plugin, milestones.$address);
+        assert.equal(mReviewer, reviewer1);
+        assert.equal(mCampaignReviewer, campaignReviewer1);
+        assert.equal(mRecipient, recipient1);
+        assert.equal(mMaxAmount, maxAmount);
+        assert.equal(mAccepted, false);
+        assert.equal(LPinitialized, true);
+    })
 
-    //     const m = await milestones.getMilestone(1);
-    //     assert.equal(m.maxAmount, 1000);
-    //     assert.equal(m.received, 0);
-    //     assert.equal(m.canCollect, 0);
-    //     assert.equal(m.reviewer, reviewer1);
-    //     assert.equal(m.campaignReviewer, campaignReviewer1);
-    //     assert.equal(m.recipient, recipient1);
-    //     assert.equal(m.accepted, false);
-    // });
 
-    // it('Should make a donation', async() => {
-    //     await liquidPledging.donate(0, 1, { from: donor1, value: 100 });
+    it('Should accept a donation', async() => {
+        const donationAmount = 100
+        await liquidPledging.addGiver('Giver1', 'URL', 0, 0x0, { from: giver1 });
+        await liquidPledging.donate(2, 1, giver1Token.$address, donationAmount, { from: giver1, $extraGas: 100000 });
 
-    //     const m = await milestones.getMilestone(1);
-    //     assert.equal(m.maxAmount, 1000);
-    //     assert.equal(m.received, 100);
-    //     assert.equal(m.canCollect, 0);
-    //     assert.equal(m.reviewer, reviewer1);
-    //     assert.equal(m.campaignReviewer, campaignReviewer1);
-    //     assert.equal(m.recipient, recipient1);
-    //     assert.equal(m.accepted, false);
-    // });
+        const st = await liquidPledgingState.getState();
 
-    // it('Should create another milestone', async() => {
-    //     await milestones.addMilestone('Milestone2', '', 1000, 0, recipient2, reviewer2, campaignReviewer2); // pledgeAdmin 3
+        console.log('st', st); 
 
-    //     const nManagers = await liquidPledging.numberOfPledgeAdmins();
-    //     assert.equal(nManagers, 3);
+        assert.equal(st.pledges[2].amount, donationAmount);
+        assert.equal(st.pledges[2].token, giver1Token.$address);
+        assert.equal(st.pledges[2].owner, 1);
+    });
 
-    //     const m = await milestones.getMilestone(3);
-    //     assert.equal(m.maxAmount, 1000);
-    //     assert.equal(m.received, 0);
-    //     assert.equal(m.canCollect, 0);
-    //     assert.equal(m.reviewer, reviewer2);
-    //     assert.equal(m.campaignReviewer, campaignReviewer2);
-    //     assert.equal(m.recipient, recipient2);
-    //     assert.equal(m.accepted, false);
-    // });
+    it('Should refund any excess donations', async() => {
+        const donationAmount = 100;
+        await liquidPledging.donate(2, 1, giver1Token.$address, donationAmount, { from: giver1, $extraGas: 100000 });
 
-    // it('Should refund any excess donations', async() => {
-    //     await liquidPledging.donate(0, 3, { from: donor2, value: 1100 });
+        const st = await liquidPledgingState.getState();
+        console.log('st', st); 
 
-    //     const m = await milestones.getMilestone(3);
-    //     assert.equal(m.maxAmount, 1000);
-    //     assert.equal(m.received, 1000);
-    //     assert.equal(m.canCollect, 0);
-    //     assert.equal(m.reviewer, reviewer2);
-    //     assert.equal(m.campaignReviewer, campaignReviewer2);
-    //     assert.equal(m.recipient, recipient2);
-    //     assert.equal(m.accepted, false);
+        // check the pledges   
+        assert.equal(st.pledges[2].amount, donationAmount);
+        assert.equal(st.pledges[2].token, giver1Token.$address);
+        assert.equal(st.pledges[2].owner, 1);
 
-    //     // await printLPState(liquidPledgingState);
-    //     // check that the 100 excess was returned to the giver's pledge
-    //     const p = await liquidPledging.getPledge(3);
-    //     assert.equal(p.amount, 100);
-    // });
+        // check received state of milestone
+        const mReceived = await milestone.received();
+        assert.equal(mReceived, donationAmount);
+    });
 
     // it('Should not be able to withdraw non-accepted milestone', async() => {
     //     await assertFail(async() => {
@@ -201,30 +197,34 @@ describe('LPPCappedMilestone test', function() {
 
     // it('Only reviewer should be able to accept milestone', async() => {
     //     await assertFail(async() => {
-    //         await milestones.acceptMilestone(3, { from: donor1 });
+    //         await milestone.acceptMilestone(3, { from: giver1 });
     //     });
     // });
 
-    // it('Should mark milestone Completed', async() => {
-    //     await milestones.acceptMilestone(3, { from: reviewer2 });
-    //     const m = await milestones.getMilestone(3);
-    //     assert.equal(m.accepted, true);
-    // });
+    it('Should mark milestone Completed', async() => {
+        await milestone.acceptMilestone(3, { from: reviewer1, $extraGas: 100000 });
 
-    // it('Should not accept funds if accepted', async() => {
-    //     await liquidPledging.donate(4, 3, { from: donor2, value: 100 });
+        // check accepted state of milestone
+        const accepted = await milestone.accepted();
+        assert.equal(accepted, true);
+    });
 
-    //     const m = await milestones.getMilestone(3);
-    //     assert.equal(m.received, 1000);
+    it('Should not accept funds if accepted', async() => {
+        const donationAmount = 100;        
+        await liquidPledging.donate(2, 1, giver1Token.$address, donationAmount, { from: giver1, $extraGas: 100000 });
 
-    //     // check that the 100 excess was returned to the giver's pledge
-    //     const p = await liquidPledging.getPledge(3);
-    //     assert.equal(p.amount, 200);
-    // });
+        // check received state of milestone
+        const mReceived = await milestone.received();
+        assert.equal(mReceived, donationAmount);
+
+        // check that the 100 excess was returned to the giver's pledge
+        const p = await liquidPledging.getPledge(3);
+        assert.equal(p.amount, 200);
+    });
 
     // it('Should not accept delegate funds if accepted', async() => {
     //     await liquidPledging.addDelegate('Delegate1', 'URLDelegate1', 0, 0, { from: delegate1 }); // admin 5
-    //     await liquidPledging.donate(4, 5, { from: donor2, value: 100 }); // pledge 5
+    //     await liquidPledging.donate(4, 5, { from: giver2, value: 100 }); // pledge 5
 
     //     await liquidPledging.transfer(5, 5, 100, 3, { from: delegate1 }); // pledge 6
 
@@ -240,7 +240,7 @@ describe('LPPCappedMilestone test', function() {
     //     await milestones.addMilestone('Milestone3', '', 1000, 0, recipient1, reviewer1, campaignReviewer1); // pledgeAdmin 6
 
     //     await assertFail(async() => {
-    //         await milestones.cancelMilestone(6, { from: donor1 });
+    //         await milestones.cancelMilestone(6, { from: giver1 });
     //     });
 
     //     await milestones.cancelMilestone(6, { from: campaignReviewer1 });
@@ -263,7 +263,7 @@ describe('LPPCappedMilestone test', function() {
     //     assert.equal(mBefore.received, 100);
 
     //     // commit the delegation
-    //     await liquidPledging.transfer(4, 7, 100, 1, { from: donor2 }); // pledge 7
+    //     await liquidPledging.transfer(4, 7, 100, 1, { from: giver2 }); // pledge 7
 
     //     const mAfter = await milestones.getMilestone(1);
     //     assert.equal(mAfter.received, 200);
@@ -312,7 +312,7 @@ describe('LPPCappedMilestone test', function() {
     // });
 
     // it('should make another donation', async() => {
-    //     await liquidPledging.donate(4, 1, { from: donor2, value: 500 });
+    //     await liquidPledging.donate(4, 1, { from: giver2, value: 500 });
     // });
 
     // it('should be accepted by campaignReviewer', async() => {
