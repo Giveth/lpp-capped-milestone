@@ -262,13 +262,6 @@ contract LPPCappedMilestone is EscapableApp {
         }
     }
 
-    function cancelMilestone() external {
-        require(_hasRole(ADMIN_ROLE) || _hasRole(REVIEWER_ROLE));
-        require(!isCanceled());
-
-        liquidPledging.cancelProject(idProject);
-    }
-
     function collect(uint64 idProject, address _token) external auth(RECIPIENT_ROLE){
         uint amount = this.balance;
 
