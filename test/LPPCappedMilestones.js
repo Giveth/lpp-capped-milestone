@@ -36,7 +36,7 @@ const printBalances = async(liquidPledging) => {
 //         milestone.campaignReviewer(),
 //         milestone.maxAmount(),
 //         milestone.received(),
-//         milestone.accepted(),
+//         milestone.completed(),
 //     ])
 //     .then(results => ({
 //         liquidPledging: results[0],
@@ -49,7 +49,7 @@ const printBalances = async(liquidPledging) => {
 //         campaignReviewer: results[7],
 //         maxAmount: results[8],
 //         received: results[9]        
-//         accepted: results[10]           
+//         completed: results[10]           
 //     }));
 // }
 
@@ -71,20 +71,22 @@ describe('LPPCappedMilestone test', function() {
     let giver1;
     let giver2;
     let delegate1;
-    let milestoneOwner1;
+    let milestoneManager1;
     let recipient1;
     let recipient2;
     let reviewer1;
     let reviewer2;
     let campaignReviewer1;
     let campaignReviewer2;
+    let reviewTimeoutSeconds = 5 * 24 * 60 * 60; // 5 days
+    let reviewTimeout;
     let maxAmount = 100;
     let idReceiver = 1;
     let idGiver1;
     let idGiver2;
     let newReviewer;
     let newRecipient;
-    let accepted;
+    let completed;
 
     before(async() => {
         testrpc = TestRPC.server({
@@ -98,11 +100,14 @@ describe('LPPCappedMilestone test', function() {
         web3 = new Web3('ws://localhost:8545');
         accounts = await web3.eth.getAccounts();
 
+        console.log('accounts >>')
+        console.log(accounts)
+
         escapeHatchCaller = accounts[0]
         escapeHatchDestination = accounts[1]
         giver1 = accounts[2]
         giver2 = accounts[3];
-        milestoneOwner1 = accounts[4];
+        milestoneManager1 = accounts[4];
         recipient1 = accounts[5];
         reviewer1 = accounts[6];
         campaignReviewer1 = accounts[7];
@@ -158,8 +163,9 @@ describe('LPPCappedMilestone test', function() {
             giver1, 
             recipient1, 
             campaignReviewer1, 
+            milestoneManager1,
             maxAmount, 
-            { from: milestoneOwner1 }
+            reviewTimeoutSeconds
         );
 
         const lpState = await liquidPledgingState.getState();
@@ -179,13 +185,15 @@ describe('LPPCappedMilestone test', function() {
     it('Should have initialized a milestone correctly', async() => {
         const mReviewer = await milestone.reviewer();
         const mCampaignReviewer = await milestone.campaignReviewer();
+        const mMilestoneManager = await milestone.milestoneManager();
         const mRecipient = await milestone.recipient();
         const mMaxAmount = await milestone.maxAmount();
-        const mAccepted = await milestone.accepted();
+        const mAccepted = await milestone.completed();
         const LPinitialized = await milestone.LPinitialized();
 
         assert.equal(mReviewer, reviewer1);
         assert.equal(mCampaignReviewer, campaignReviewer1);
+        assert.equal(mMilestoneManager, milestoneManager1);
         assert.equal(mRecipient, recipient1);
         assert.equal(mMaxAmount, maxAmount);
         assert.equal(mAccepted, false);
@@ -227,7 +235,7 @@ describe('LPPCappedMilestone test', function() {
         assert.equal(mReceived, donationAmount);
     });
 
-    // it('Should not be able to withdraw non-accepted milestone', async() => {
+    // it('Should not be able to withdraw non-completed milestone', async() => {
     //     await assertFail(async() => {
     //         await milestones.withdraw(3, 3, 1000);
     //     });
@@ -239,62 +247,94 @@ describe('LPPCappedMilestone test', function() {
     //     });
     // });
 
-    it('Only reviewer and campaingReviewer can mark milestone as Completed', async() => {
-        await assertFail(milestone.acceptMilestone(3, { from: recipient1, gas: 4000000 }));
-        await assertFail(milestone.acceptMilestone(3, { from: giver1, gas: 4000000 }));
+    it('Only Milestone Manager can request a milestone as complete', async() => {
+        // check that other roles cannot mark as complete
+        await assertFail(milestone.requestMarkAsComplete(3, { from: recipient1, gas: 4000000 }));
+        await assertFail(milestone.requestMarkAsComplete(3, { from: giver1, gas: 4000000 }));       
+        
+        // check that state of milestone didn't change
+        requestComplete = await milestone.requestComplete();
+        completed = await milestone.completed();        
+        reviewTimeout = await milestone.reviewTimeout();
+        assert.equal(requestComplete, false);
+        assert.equal(reviewTimeout, 0);
+        assert.equal(completed, false);
 
-        // check accepted state of milestone
-        accepted = await milestone.accepted();
-        assert.equal(accepted, false);
+        // milestone manager can request mark as complete
+        await milestone.requestMarkAsComplete(3, { from: milestoneManager1, gas: 4000000 });
+        
+        // check that state of milestone changed
+        requestComplete = await milestone.requestComplete();
+        completed = await milestone.completed();        
+        reviewTimeout = await milestone.reviewTimeout();
+        assert.equal(requestComplete, true);
+        assert.notEqual(reviewTimeout, 0); 
+        assert.equal(completed, false);        
+    })
 
-        // reviewer1 can mark as complete
-        await milestone.acceptMilestone(3, { from: reviewer1, gas: 4000000 });
-        // check accepted state of milestone
-        accepted = await milestone.accepted();
-        assert.equal(accepted, true);    
 
-        let lpState = await liquidPledgingState.getState();
+    it('Only Reviewer can reject a milestone as complete', async() => {
+        // request mark as complete
+        await milestone.requestMarkAsComplete(3, { from: milestoneManager1, gas: 4000000 });
 
-        // campaignReviewer can mark as complete, create a new milestone for this to test
-        await factory.newMilestone(
-            'Milestone 2', 
-            'URL1', 
-            0, 
-            reviewer1, 
-            escapeHatchCaller, 
-            giver1, 
-            recipient1, 
-            campaignReviewer1, 
-            maxAmount, 
-            { from: milestoneOwner1 }
-        );
+        // check that other roles cannot mark as complete
+        await assertFail(milestone.rejectCompleteRequest(3, { from: giver1, gas: 4000000 }));    
+        await assertFail(milestone.rejectCompleteRequest(3, { from: milestoneManager1, gas: 4000000 }));    
+        
+        // check that state of milestone didn't change
+        completed = await milestone.completed();        
+        reviewTimeout = await milestone.reviewTimeout();
+        assert.notEqual(reviewTimeout, 0); 
+        assert.equal(completed, false);
 
-        lpState = await liquidPledgingState.getState();
+        // reviewer can reject complete request
+        await milestone.rejectCompleteRequest(3, { from: reviewer1, gas: 4000000 });
+        
+        // check that state of milestone changed
+        completed = await milestone.completed();        
+        reviewTimeout = await milestone.reviewTimeout();
+        assert.equal(reviewTimeout, 0); 
+        assert.equal(completed, false);
+    })
 
-        lpManager = lpState.admins[1];        
-        milestone = new contracts.LPPCappedMilestone(web3, lpManager.plugin);
 
-        // canceling will fail
-        await milestone.acceptMilestone(3, { from: campaignReviewer1, gas: 4000000 });   
+    it('Only Reviewer can mark a milestone as complete', async() => {
+        // mark as complete
+        await milestone.requestMarkAsComplete(3, { from: milestoneManager1, gas: 4000000 });
 
-    });    
+        // check that other roles cannot mark as complete
+        await assertFail(milestone.approveMilestoneCompleted(3, { from: recipient1, gas: 4000000 }));
+        await assertFail(milestone.approveMilestoneCompleted(3, { from: milestoneManager1, gas: 4000000 }));       
+        
+        // check that state of milestone changed
+        completed = await milestone.completed();        
+        assert.equal(completed, false);
+
+        // only reviewer can mark as complete
+        await milestone.approveMilestoneCompleted(3, { from: reviewer1, gas: 4000000 });
+        
+        // check that state of milestone changed
+        completed = await milestone.completed();        
+        assert.equal(completed, true);
+    })
+
 
     it('Only reviewer can request changing reviewer', async() => {
-        await assertFail(milestone.changeReviewer(giver1, { from: giver1, gas: 4000000 }));
+        await assertFail(milestone.requestChangeReviewer(giver1, { from: giver1, gas: 4000000 }));
         newReviewer = await milestone.newReviewer();
         assert.equal(newReviewer, "0x0000000000000000000000000000000000000000");
 
-        await milestone.changeReviewer(reviewer2, { from: reviewer1, gas: 4000000 });
+        await milestone.requestChangeReviewer(reviewer2, { from: reviewer1, gas: 4000000 });
         newReviewer = await milestone.newReviewer();
         assert.equal(newReviewer, reviewer2);
     })
 
     it('Only the new reviewer can accept becoming the new reviewer', async() => {
-        await assertFail(milestone.acceptNewReviewer({ from: reviewer1, gas: 4000000 }));
+        await assertFail(milestone.acceptNewReviewerRequest({ from: reviewer1, gas: 4000000 }));
         reviewer = await milestone.reviewer();
         assert.equal(reviewer, reviewer1);
 
-        await milestone.acceptNewReviewer({ from: reviewer2, gas: 4000000 });
+        await milestone.acceptNewReviewerRequest({ from: reviewer2, gas: 4000000 });
         reviewer = await milestone.reviewer();
         newReviewer = await milestone.newReviewer();        
         assert.equal(reviewer, reviewer2);
@@ -302,11 +342,11 @@ describe('LPPCappedMilestone test', function() {
     }) 
 
     it('Only reviewer can request changing recipient', async() => {
-        await assertFail(milestone.changeRecipient(recipient2, { from: recipient1, gas: 4000000 }));
+        await assertFail(milestone.requestChangeRecipient(recipient2, { from: recipient1, gas: 4000000 }));
         newRecipient = await milestone.newRecipient();
         assert.equal(newRecipient, "0x0000000000000000000000000000000000000000");
 
-        await milestone.changeRecipient(recipient2, { from: reviewer2, gas: 4000000 });
+        await milestone.requestChangeRecipient(recipient2, { from: reviewer2, gas: 4000000 });
         newRecipient = await milestone.newRecipient();
         assert.equal(newRecipient, recipient2);
     })
@@ -326,7 +366,7 @@ describe('LPPCappedMilestone test', function() {
 
 
 
-    // it('Should not accept delegate funds if accepted', async() => {
+    // it('Should not accept delegate funds if completed', async() => {
     //     await liquidPledging.addDelegate('Delegate1', 'URLDelegate1', 0, 0, { from: delegate1 }); // admin 5
     //     await liquidPledging.donate(2, 5, { from: giver2, value: 100 }); // pledge 5
 
@@ -355,13 +395,13 @@ describe('LPPCappedMilestone test', function() {
     //     assert.equal(mAfter.received, 200);
     // });
 
-    // it('Only recipient can withdraw funds from accepted milestone', async() => {
+    // it('Only recipient can withdraw funds from completed milestone', async() => {
     //     await assertFail(async() => {
     //         await milestones.withdraw(3, 4, 200, { from: recipient1 });
     //     });
     // });
 
-    // it('Should be able to withdraw funds from accepted milestone', async() => {
+    // it('Should be able to withdraw funds from completed milestone', async() => {
     //     // paying
     //     await milestones.withdraw(3, 4, 200, { from: recipient2 });
 
@@ -428,8 +468,9 @@ describe('LPPCappedMilestone test', function() {
             giver1, 
             recipient1, 
             campaignReviewer1, 
+            milestoneManager1,
             maxAmount, 
-            { from: milestoneOwner1 }
+            reviewTimeoutSeconds
         );
 
         const lpState = await liquidPledgingState.getState();
@@ -452,8 +493,9 @@ describe('LPPCappedMilestone test', function() {
             giver1, 
             recipient1, 
             campaignReviewer1, 
+            milestoneManager1,
             maxAmount, 
-            { from: milestoneOwner1 }
+            reviewTimeoutSeconds
         );
 
         const lpState = await liquidPledgingState.getState();

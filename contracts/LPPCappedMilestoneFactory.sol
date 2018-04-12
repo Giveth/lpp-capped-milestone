@@ -36,7 +36,9 @@ contract LPPCappedMilestoneFactory is LPConstants, Escapable, AppProxyFactory {
         address escapeHatchDestination,
         address recipient,
         address campaignReviewer,
-        uint maxAmount
+        address milestoneManager,
+        uint maxAmount,
+        uint reviewTimeoutSeconds
     ) public
     {
         address milestoneBase = kernel.getApp(MILESTONE_APP);
@@ -44,9 +46,9 @@ contract LPPCappedMilestoneFactory is LPConstants, Escapable, AppProxyFactory {
         address liquidPledging = kernel.getApp(LP_APP_INSTANCE);
         require(liquidPledging != 0);
 
-        LPPCappedMilestone milestone = _init(name, url, parentProject, reviewer, escapeHatchDestination, recipient, campaignReviewer, maxAmount, liquidPledging);
+        LPPCappedMilestone milestone = _init(name, url, parentProject, reviewer, escapeHatchDestination, recipient, campaignReviewer, milestoneManager, maxAmount, reviewTimeoutSeconds, liquidPledging);
         
-        _setPermissions(milestone, reviewer, recipient, escapeHatchCaller);
+        _setPermissions(milestone, reviewer, recipient, milestoneManager, escapeHatchCaller);
 
         DeployMilestone(address(milestone));
     }
@@ -55,6 +57,7 @@ contract LPPCappedMilestoneFactory is LPConstants, Escapable, AppProxyFactory {
         LPPCappedMilestone milestone,
         address reviewer,
         address recipient,
+        address milestoneManager,
         address escapeHatchCaller
     ) internal
     {
@@ -63,12 +66,12 @@ contract LPPCappedMilestoneFactory is LPConstants, Escapable, AppProxyFactory {
         bytes32 hatchCallerRole = milestone.ESCAPE_HATCH_CALLER_ROLE();
         bytes32 reviewerRole = milestone.REVIEWER_ROLE();
         bytes32 recipientRole = milestone.RECIPIENT_ROLE();
-        bytes32 adminRole = milestone.ADMIN_ROLE();
+        bytes32 manageRole = milestone.MANAGER_ROLE();
 
         acl.createPermission(reviewer, address(milestone), reviewerRole, address(milestone));
         acl.createPermission(recipient, address(milestone), recipientRole, address(milestone));
         acl.createPermission(escapeHatchCaller, address(milestone), hatchCallerRole, escapeHatchCaller);
-        acl.createPermission(msg.sender, address(milestone), adminRole, msg.sender);
+        acl.createPermission(milestoneManager, address(milestone), manageRole, milestoneManager);
     }
 
     function _init(
@@ -79,7 +82,9 @@ contract LPPCappedMilestoneFactory is LPConstants, Escapable, AppProxyFactory {
         address escapeHatchDestination,
         address recipient,
         address campaignReviewer,
+        address milestoneManager,
         uint maxAmount,
+        uint reviewTimeoutSeconds,
         address liquidPledging
     ) internal returns (LPPCappedMilestone)
     {
@@ -89,7 +94,7 @@ contract LPPCappedMilestoneFactory is LPConstants, Escapable, AppProxyFactory {
 
         milestone.initializeLP(name, url, liquidPledging, parentProject);
 
-        milestone.initialize(escapeHatchDestination, reviewer, campaignReviewer, recipient, maxAmount);
+        milestone.initialize(escapeHatchDestination, reviewer, campaignReviewer, recipient, milestoneManager, maxAmount, reviewTimeoutSeconds);
 
         return milestone;
     }
