@@ -342,32 +342,34 @@ contract LPPCappedMilestone is EscapableApp {
         }
     }
 
-    // check if reviewTimeout, if yes, set completed to yes
-    // function mWithdraw external auth(RECIPIENT_ROLE) {
-    //     if now > reviewTimeout {
-    //         completed = true;
-    //     }
+    // @notice Allows the recipient to withdraw money from the vault to this milestone.
+    // Checks if reviewTimeout has passed, if so, sets completed to yes
+    function mWithdraw(uint[] pledgesAmounts) external auth(RECIPIENT_ROLE) {        
+        if (reviewTimeout > 0 && now > reviewTimeout) {
+            completed = true;
+        }
 
-    //     if (completed) {
-    //         // withdraw pledges;
-    //     }
-    // }
+        require(completed);
 
-    // rewrite for eth and collect
+        liquidPledging.mWithdraw(pledgesAmounts);
+    }
+
+    // @notice Allows the recipient to collect ether or tokens from this milestones
     function collect(uint64 idProject, address _token) external auth(RECIPIENT_ROLE){
-        uint amount = this.balance;
-
-        ERC20 milestoneToken = ERC20(_token);
-        assert(milestoneToken.balanceOf(this) >= amount);
-
-        require(milestoneToken.transfer(recipient, amount));
+        require(!paid);
+        
+        // check for ether or token
+        if (_token == address(0x0)) {
+            paid = true;
+            recipient.transfer(this.balance);
+        } else {
+            ERC20 milestoneToken = ERC20(_token);
+            assert(milestoneToken.balanceOf(this) >= received);
+            
+            paid = true;
+            require(milestoneToken.transfer(recipient, received));
+        }
 
         PaymentCollected(liquidPledging, idProject);
     }
-
-
-    function _getTime() internal view returns (uint) {
-        return now;
-    }
-
 }
