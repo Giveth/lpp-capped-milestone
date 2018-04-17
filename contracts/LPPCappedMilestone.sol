@@ -54,6 +54,7 @@ contract LPPCappedMilestone is EscapableApp {
     address public newRecipient;
     address public campaignReviewer;
     address public milestoneManager;
+    address public acceptedToken;
     uint public maxAmount;
     uint public received = 0;
     bool public requestComplete;
@@ -67,6 +68,7 @@ contract LPPCappedMilestone is EscapableApp {
     uint public reviewTimeout = 0;
 
     bool public LPinitialized = false;
+    bool public capInitialized = false;
 
     event MilestoneCompleteRequested(address indexed liquidPledging, uint64 indexed idProject);
     event MilestoneCompleteRequestRejected(address indexed liquidPledging, uint64 indexed idProject);
@@ -113,6 +115,17 @@ contract LPPCappedMilestone is EscapableApp {
         LPinitialized = true;      
     }
 
+    function initializeCap(
+        uint _maxAmount,
+        address _acceptedToken        
+    ) onlyInit external 
+    {
+        maxAmount = _maxAmount;
+        acceptedToken = _acceptedToken;
+
+        capInitialized = true;
+    }
+
     // initializes everything else
     function initialize(
         address _escapeHatchDestination,
@@ -120,25 +133,24 @@ contract LPPCappedMilestone is EscapableApp {
         address _campaignReviewer,
         address _recipient,
         address _milestoneManager,
-        uint _maxAmount,
         uint _reviewTimeoutSeconds
     ) onlyInit external
     {
-        require(_recipient != 0);
-        require(_reviewer != 0);
+        require(_reviewer != 0);        
         require(_campaignReviewer != 0);
+        require(_recipient != 0);
         require(_milestoneManager != 0);
 
         // @dev LP needs to be initialized first
         // This is to avoid stack too deep errors
         // and avoid calling super.initialize too soon
         require(LPinitialized);
+        require(capInitialized);
 
         super.initialize(_escapeHatchDestination);
 
         reviewer = _reviewer;        
         recipient = _recipient;
-        maxAmount = _maxAmount;
         completed = false;
         reviewTimeoutSeconds = _reviewTimeoutSeconds;
 
@@ -275,6 +287,13 @@ contract LPPCappedMilestone is EscapableApp {
     ) external returns (uint maxAllowed)
     {
         require(msg.sender == address(liquidPledging));
+        
+        // if acceptedToken is set, only accept that token
+        if (acceptedToken != 0)
+            if(token != acceptedToken) {
+                return 0;
+            }
+
         var (, , , fromIntendedProject, , , ,) = liquidPledging.getPledge(pledgeFrom);
         var (, toOwner, , , , , ,toPledgeState) = liquidPledging.getPledge(pledgeTo);
 
@@ -319,7 +338,7 @@ contract LPPCappedMilestone is EscapableApp {
 
         if (context == TO_OWNER) {
             // If fromOwner != toOwner, the means that a pledge is being committed to
-            // milestone m. We will accept any amount up to m.maxAmount, and return
+            // milestone. We will accept any amount up to m.maxAmount, and return
             // the rest
             if (fromOwner != toOwner) {
                 uint returnFunds = 0;
