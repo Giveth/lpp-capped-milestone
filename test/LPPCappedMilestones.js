@@ -25,36 +25,6 @@ const printBalances = async(liquidPledging) => {
     }
 };
 
-// const getMilestoneState = async(milestone) => {
-//     return Promise.all([
-//         milestone.liquidPledging(),
-//         milestone.idProject(),
-//         milestone.LPinitialized(),
-//         milestone.reviewer(),
-//         milestone.newReviewer(),
-//         milestone.recipient(),
-//         milestone.newRecipient(),
-//         milestone.campaignReviewer(),
-//         milestone.maxAmount(),
-//         milestone.received(),
-//         milestone.completed(),
-//     ])
-//     .then(results => ({
-//         liquidPledging: results[0],
-//         idProject: results[1],
-//         LPinitialized: results[2],
-//         reviewer: results[3],
-//         newReviewer: results[4],
-//         recipient: results[5]
-//         newRecipient: results[6],
-//         campaignReviewer: results[7],
-//         maxAmount: results[8],
-//         received: results[9]        
-//         completed: results[10]           
-//     }));
-// }
-
-
 describe('LPPCappedMilestone test', function() {
     this.timeout(0);
 
@@ -206,17 +176,15 @@ describe('LPPCappedMilestone test', function() {
 
 
     it('Should accept a donation', async() => {
-        const donationAmount = 100
+        const donationAmount = 95
         await liquidPledging.addGiver('Giver1', 'URL', 0, 0x0, { from: giver1 });
         idGiver1 = 2
         await liquidPledging.donate(idGiver1, idReceiver, giver1Token.$address, donationAmount, { from: giver1, $extraGas: 100000 });
 
-        const st = await liquidPledgingState.getState();
-        // console.log(st);
-
-        assert.equal(st.pledges[2].amount, donationAmount);
-        assert.equal(st.pledges[2].token, giver1Token.$address);
-        assert.equal(st.pledges[2].owner, idReceiver);
+        const donation = await liquidPledging.getPledge(2);
+        assert.equal(donation.amount, donationAmount);
+        assert.equal(donation.token, giver1Token.$address);
+        assert.equal(donation.owner, idReceiver);
     });
 
 
@@ -245,35 +213,36 @@ describe('LPPCappedMilestone test', function() {
 
         // giver1 commits the funds
         res = await liquidPledging.setMockedTime(now + 86401, { $extraGas: 200000 });
-        console.log(res);   
-        await liquidPledging.normalizePledge(4);
+        await liquidPledging.normalizePledge(4, { $extraGas: 200000 }); // pledge 5
      
-
-        st = await liquidPledgingState.getState();
-        console.log('4', st);
-
-        // this does not work because we're donating and comitting a token
-        // const receivedAfterCommittingDelegation = await milestone.received();
-        // console.log(receivedAfterCommittingDelegation);
-        // assert.notEqual(receivedBeforeDelegation, receivedAfterCommittingDelegation);
+        // milestone received changed from 95 to 100
+        const receivedAfterCommittingDelegation = await milestone.received();
+        assert.notEqual(receivedBeforeDelegation, receivedAfterCommittingDelegation);
+        assert.equal(receivedAfterCommittingDelegation, 100);
 
         // check pledges
-        assert.equal(st.pledges[2].amount, 100 + donationAmount);
-        assert.equal(st.pledges[2].token, giver1Token.$address);
-        assert.equal(st.pledges[2].owner, 1);                
+        // a new pledge is created with the owner the project
+        const delegatedDonation = await liquidPledging.getPledge(5);
+        assert.equal(delegatedDonation.amount, donationAmount);
+        assert.equal(delegatedDonation.token, giver1Token.$address);
+        assert.equal(delegatedDonation.owner, 1);                
     });
 
 
     it('Should refund any excess donations', async() => {
         // check received state of milestone
-        const mReceivedBefore = await milestone.received();
+        const mReceivedBefore = await milestone.received();      
 
         const donationAmount = 100;
-        await liquidPledging.donate(idGiver1, idReceiver, giver1Token.$address, donationAmount, { from: giver1, $extraGas: 100000 }); // pledge 6
+        await liquidPledging.donate(idGiver1, idReceiver, giver1Token.$address, donationAmount, { from: giver1, $extraGas: 100000 }); 
 
         // check received state of milestone
         const mReceivedAfter = await milestone.received();
         assert.equal(mReceivedAfter, mReceivedBefore);
+
+        // donor should have his excess donationAmount back
+        const refundedDonation = await liquidPledging.getPledge(1);
+        assert.equal(refundedDonation.amount, donationAmount);   
     });
 
 
@@ -282,11 +251,11 @@ describe('LPPCappedMilestone test', function() {
         const mReceivedBefore = await milestone.received();
 
         const donationAmount = 100;
-        await liquidPledging.donate(idGiver1, idReceiver, someRandomToken.$address, donationAmount, { from: giver1, $extraGas: 100000 }); // pledge 6
+        await liquidPledging.donate(idGiver1, idReceiver, someRandomToken.$address, donationAmount, { from: giver1, $extraGas: 100000 });
 
         // check received state of milestone
         const mReceivedAfter = await milestone.received();
-        assert.equal(mReceivedAfter, mReceivedBefore);
+        assert.equal(mReceivedAfter, mReceivedBefore);      
     });    
 
 
@@ -294,7 +263,7 @@ describe('LPPCappedMilestone test', function() {
         const lpState = await liquidPledgingState.getState();
 
         const pledges = [
-          { amount: utils.toWei('100'), id: 2 },
+          { amount: 100, id: 2 },
         ];
 
         // .substring is to remove the 0x prefix on the toHex result
@@ -378,36 +347,31 @@ describe('LPPCappedMilestone test', function() {
 
 
     it('Completed milestone should not accept any donation', async() => {
-        const donationAmount = 100;
+        const donationAmount = 45;
 
         // check milestone state before donation
         let mReceived = await milestone.received();
-        assert.equal(mReceived, donationAmount);
+        assert.equal(mReceived, 100);  
 
         await liquidPledging.donate(idGiver1, idReceiver, giver1Token.$address, donationAmount, { from: giver1, $extraGas: 100000 });
 
-        const st = await liquidPledgingState.getState();
-
-        // check the pledges   
-        assert.equal(st.pledges[idGiver1].amount, donationAmount);
-        assert.equal(st.pledges[idGiver1].token, giver1Token.$address);
-        assert.equal(st.pledges[idGiver1].owner, idReceiver);
-
-        assert.equal(st.pledges[idReceiver].amount, 100 + donationAmount);
-        assert.equal(st.pledges[idReceiver].token, giver1Token.$address);
-        assert.equal(st.pledges[idReceiver].owner, idGiver1);
+        // donor should have his donationAmount back
+        const refundedDonation = await liquidPledging.getPledge(1);
+        assert.equal(refundedDonation.amount, 100 + donationAmount);
+        assert.equal(refundedDonation.token, giver1Token.$address);
+        assert.equal(refundedDonation.owner, idGiver1);
 
         // check received state of milestone after donation
         mReceived = await milestone.received();
-        assert.equal(mReceived, donationAmount);
+        assert.equal(mReceived, 100);
     });
 
 
     it('Only recipient should be able to withdraw', async() => {
-        const lpState = await liquidPledgingState.getState();
+        received = await milestone.received()
 
         const pledges = [
-          { amount: utils.toWei('100'), id: 2 },
+          { amount: 50, id: 2 },
         ];
 
         // .substring is to remove the 0x prefix on the toHex result
@@ -488,75 +452,34 @@ describe('LPPCappedMilestone test', function() {
 
     it('Should not accept delegate funds if completed', async() => {
         const receivedBeforeDelegation = await milestone.received();
+          
+        // set the time
+        const now = Math.round(new Date().getTime() / 1000);
+        await liquidPledging.setMockedTime(now, { $extraGas: 200000 });         
 
         const idDelegate1 = 3
         const donationAmount = 250
         await liquidPledging.donate(idGiver1, idDelegate1, giver1Token.$address, donationAmount, { from: giver1, gas: 4000000 }); // pledge 3
+
+        // delegate1 transfers the pledge to the milestone
         await liquidPledging.transfer(idDelegate1, 3, donationAmount, 1, { from: delegate1, gas: 4000000 }); // pledge 5
 
-        // check that the donationAmount excess was returned to the giver's pledge
+        // the funds are not accepted
+        const receivedBeforeCommittingDelegation = await milestone.received();
+        assert.equal(receivedBeforeDelegation, receivedBeforeCommittingDelegation);
+
+        // giver1 commits the funds
+        res = await liquidPledging.setMockedTime(now + 86401, { $extraGas: 200000 });
+        await liquidPledging.normalizePledge(3, { $extraGas: 200000 });  
+
+        // funds are still at the delegate
         const delegatePledge = await liquidPledging.getPledge(3);
         assert.equal(delegatePledge.amount, donationAmount);
 
-        // check that pledge 5 w/ intendedProject is 0
-        const intendedProjectPledge = await liquidPledging.getPledge(5);
-        assert.equal(intendedProjectPledge.amount, 0);
-
+        // milestone received is still the same
         const receivedAfterDelegation = await milestone.received();
         assert.equal(receivedBeforeDelegation, receivedAfterDelegation);
     });
-
-
-    // it('Should be able to withdraw funds from completed milestone', async() => {
-    //     // paying
-    //     await milestones.withdraw(3, 4, 200, { from: recipient2 });
-
-    //     // confirm payment
-    //     await vault.confirmPayment(0);
-
-    //     const bal = await web3.eth.getBalance(milestones.$address);
-    //     assert.equal(bal, 200);
-
-    //     const m = await milestones.getMilestone(3);
-    //     assert.equal(m.canCollect, 200);
-    // });
-
-    // it('only recipient can collect funds', async() => {
-    //     await assertFail(async() => {
-    //         await milestones.collect(3, { from: recipient1 });
-    //     });
-    // });
-
-    // it('Should be able to collect funds', async() => {
-    //     const startBal = await web3.eth.getBalance(recipient2);
-
-    //     const { gasUsed } = await milestones.collect(3, { from: recipient2, gas: 50000, gasPrice: 1 });
-
-    //     const endBal = await web3.eth.getBalance(recipient2);
-    //     const expected = web3.utils.toBN(startBal).add(web3.utils.toBN('200')).sub(web3.utils.toBN(gasUsed)).toString();
-    //     assert.equal(endBal, expected);
-
-    //     const bal = await web3.eth.getBalance(milestones.$address);
-    //     assert.equal(bal, 0);
-
-    //     const m = await milestones.getMilestone(3);
-    //     assert.equal(m.canCollect, 0);
-    // });
-
-
-    // it('should not be able to collect if canCollect is 0', async() => {
-    //     // await printLPState(liquidPledgingState);
-    //     const m = await milestones.getMilestone(3);
-    //     assert.equal(m.canCollect, 0);
-
-    //     const startBal = await web3.eth.getBalance(milestones.$address);
-    //     assert.isAbove(web3.utils.toDecimal(startBal), 0);
-
-    //     await milestones.collect(3, { from: recipient2 });
-
-    //     const endBal = await web3.eth.getBalance(milestones.$address);
-    //     assert.equal(startBal, endBal)
-    // });
 
     it('Nobody else but Reviewer and Milestone Manager can cancel milestone', async() => {
         await assertFail(milestone.cancelMilestone(1, { from: recipient2, gas: 4000000 }));
@@ -579,7 +502,7 @@ describe('LPPCappedMilestone test', function() {
             recipient1, 
             campaignReviewer1, 
             milestoneManager1,
-            maxAmount, 
+            1000, 
             giver1Token.$address,
             reviewTimeoutSeconds
         );
@@ -597,32 +520,19 @@ describe('LPPCappedMilestone test', function() {
     })
 
     it('A canceled milestone cannot be canceled again', async() => {
-        // create a new milestone
-        await factory.newMilestone(
-            'Milestone 3', 
-            'URL1', 
-            0, 
-            reviewer1, 
-            escapeHatchCaller, 
-            giver1, 
-            recipient1, 
-            campaignReviewer1, 
-            milestoneManager1,
-            maxAmount, 
-            giver1Token.$address,
-            reviewTimeoutSeconds
-        );
-
-        const lpState = await liquidPledgingState.getState();
-        lpManager = lpState.admins[1];        
-
-        milestone = new contracts.LPPCappedMilestone(web3, lpManager.plugin);
-
-        // canceling will fail
-        await assertFail(milestone.cancelMilestone(2, { from: campaignReviewer1, gas: 4000000 }));  
+        await assertFail(milestone.cancelMilestone(4, { from: milestoneManager1, gas: 4000000 }));  
     });
 
-    // it('Should throw on transfer if canceled', async() => {
-    //     await assertFail(liquidPledging.transfer(2, 3, 100, 6, { from: delegate1 }));
-    // });
+
+    it('Canceled milestone should not accept new donations', async() => {
+        receivedBeforeDonation = await milestone.received()
+
+        // donate to milestone
+        await liquidPledging.donate(2, 4, giver1Token.$address, 150, { from: giver1, gas: 4000000 });
+        
+        // donation is not accepted
+        receivedAfterDonation = await milestone.received()
+        assert.equal(receivedBeforeDonation, receivedAfterDonation)
+    }); 
+
 });

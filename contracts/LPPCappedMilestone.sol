@@ -349,6 +349,7 @@ contract LPPCappedMilestone is EscapableApp {
                     returnFunds = amount;
                 } else if (newBalance > maxAmount) {
                     returnFunds = newBalance - maxAmount;
+                    received = maxAmount;
                 } else {
                     received = received + amount;
                 }
