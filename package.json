@@ -1,6 +1,6 @@
 {
-    "name": "lpp-capped-milestone-token",
-    "version": "0.0.2",
+    "name": "lpp-capped-milestone",
+    "version": "0.1.0",
     "description": "Contract for generating capped milestone with reviewer for liquidpledging.",
     "main": "index.js",
     "directories": {
