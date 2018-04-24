@@ -77,7 +77,7 @@ contract LPPCappedMilestone is EscapableApp {
     event MilestoneChangeReviewerRequested(address indexed liquidPledging, uint64 indexed idProject, address reviewer);
     event MilestoneReviewerChanged(address indexed liquidPledging, uint64 indexed idProject, address reviewer);
 
-    event MilestoneChangeRecipientRequested(address indexed liquidPledging, uint64 indexed idProject, address reviewer);
+    event MilestoneChangeRecipientRequested(address indexed liquidPledging, uint64 indexed idProject, address recipient);
     event MilestoneRecipientChanged(address indexed liquidPledging, uint64 indexed idProject, address recipient);
 
     event PaymentCollected(address indexed liquidPledging, uint64 indexed idProject);
@@ -375,7 +375,7 @@ contract LPPCappedMilestone is EscapableApp {
     }
 
     // @notice Allows the recipient to collect ether or tokens from this milestones
-    function collect(uint64 idProject, address _token) external auth(RECIPIENT_ROLE){
+    function collect(uint64 idProject, address _token) external auth(RECIPIENT_ROLE) {
         require(!paid);
         
         // check for ether or token
