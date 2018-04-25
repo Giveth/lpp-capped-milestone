@@ -67,9 +67,6 @@ contract LPPCappedMilestone is EscapableApp {
     uint public reviewTimeoutSeconds;
     uint public reviewTimeout = 0;
 
-    bool public LPinitialized = false;
-    bool public capInitialized = false;
-
     event MilestoneCompleteRequested(address indexed liquidPledging, uint64 indexed idProject);
     event MilestoneCompleteRequestRejected(address indexed liquidPledging, uint64 indexed idProject);
     event MilestoneCompleteRequestApproved(address indexed liquidPledging, uint64 indexed idProject);
@@ -91,64 +88,37 @@ contract LPPCappedMilestone is EscapableApp {
         _escapeHatchDestination;
     }
 
-    // @notice we split the initialization because it was throwing stack too deep error
-    //  initializes LP, this needs to be called first
-    function initializeLP(
-        string _name,
-        string _url,        
-        address _liquidPledging,
-        uint64 _parentProject
-    ) onlyInit external
-    {
-        require(_liquidPledging != 0);        
-        liquidPledging = LiquidPledging(_liquidPledging);
-
-        idProject = liquidPledging.addProject(
-            _name,
-            _url,
-            address(this),
-            _parentProject,
-            0,
-            ILiquidPledgingPlugin(this)
-        );  
-
-        LPinitialized = true;      
-    }
-
-    function initializeCap(
-        uint _maxAmount,
-        address _acceptedToken        
-    ) onlyInit external 
-    {
-        maxAmount = _maxAmount;
-        acceptedToken = _acceptedToken;
-
-        capInitialized = true;
-    }
-
-    // initializes everything else
+    // @notice we pass in the idProject here because it was throwing stack too deep error
     function initialize(
         address _escapeHatchDestination,
         address _reviewer,
         address _campaignReviewer,
         address _recipient,
         address _milestoneManager,
-        uint _reviewTimeoutSeconds
+        uint _reviewTimeoutSeconds,
+        uint _maxAmount,
+        address _acceptedToken,
+        // if these params are at the beginning, we get a stack too deep error
+        address _liquidPledging,
+        uint64 _idProject
     ) onlyInit external
     {
         require(_reviewer != 0);        
         require(_campaignReviewer != 0);
         require(_recipient != 0);
         require(_milestoneManager != 0);
-
-        // @dev LP needs to be initialized first
-        // This is to avoid stack too deep errors
-        // and avoid calling super.initialize too soon
-        require(LPinitialized);
-        require(capInitialized);
+        require(_liquidPledging != 0);
 
         super.initialize(_escapeHatchDestination);
 
+        idProject = _idProject;
+        liquidPledging = LiquidPledging(_liquidPledging);
+
+        var ( , addr, , , , , , plugin) = liquidPledging.getPledgeAdmin(idProject);
+        require(addr == address(this) && plugin == address(this));
+
+        maxAmount = _maxAmount;
+        acceptedToken = _acceptedToken;
         reviewer = _reviewer;        
         recipient = _recipient;
         completed = false;
@@ -161,12 +131,12 @@ contract LPPCappedMilestone is EscapableApp {
     }
 
 
-
     //== internal
 
     function _hasRole(bytes32 role) internal returns(bool) {
-      return canPerform(msg.sender, role, new uint[](0));
+        return canPerform(msg.sender, role, new uint[](0));
     }        
+
 
     //== external
 

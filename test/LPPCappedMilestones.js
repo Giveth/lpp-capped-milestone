@@ -197,7 +197,6 @@ describe('LPPCappedMilestone test', function() {
     const mRecipient = await milestone.recipient();
     const mMaxAmount = await milestone.maxAmount();
     const mAccepted = await milestone.completed();
-    const LPinitialized = await milestone.LPinitialized();
 
     assert.equal(mReviewer, reviewer1);
     assert.equal(mCampaignReviewer, campaignReviewer1);
@@ -205,7 +204,6 @@ describe('LPPCappedMilestone test', function() {
     assert.equal(mRecipient, recipient1);
     assert.equal(mMaxAmount, maxAmount);
     assert.equal(mAccepted, false);
-    assert.equal(LPinitialized, true);
   });
 
   it('Should accept a donation', async () => {

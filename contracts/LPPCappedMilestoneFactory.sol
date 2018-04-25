@@ -55,33 +55,47 @@ contract LPPCappedMilestoneFactory is LPConstants, Escapable, AppProxyFactory {
         uint _reviewTimeoutSeconds
     ) public
     {
+        var (liquidPledging, milestone, idProject) = _deployMilestone(_name, _url, _parentProject);
+        milestone.initialize(
+            _escapeHatchDestination,
+            _reviewer,
+            _campaignReviewer,
+            _recipient,
+            _milestoneManager,
+            _reviewTimeoutSeconds,
+            _maxAmount,
+            _acceptedToken,
+            liquidPledging,
+            idProject
+        );
 
-        // @dev All this is stored in the contract, because there are
-        // too many variables to pass around, resulting in stack too deep
-        name = _name;
-        url = _url;
-        parentProject = _parentProject;
-        reviewer = _reviewer;
-        escapeHatchCaller = _escapeHatchCaller;
-        escapeHatchDestination = _escapeHatchDestination;
-        recipient = _recipient;
-        campaignReviewer = _campaignReviewer;
-        milestoneManager = _milestoneManager;
-        maxAmount = _maxAmount;
-        acceptedToken = _acceptedToken;
-        reviewTimeoutSeconds = _reviewTimeoutSeconds;
-
-
-        address milestoneBase = kernel.getApp(MILESTONE_APP);
-        require(milestoneBase != 0);
-        address liquidPledging = kernel.getApp(LP_APP_INSTANCE);
-        require(liquidPledging != 0);
-
-        LPPCappedMilestone milestone = _init(liquidPledging);
-
-        _setPermissions(milestone, reviewer, recipient, milestoneManager, escapeHatchCaller);
+        _setPermissions(milestone, _reviewer, _recipient, _milestoneManager, _escapeHatchCaller);
 
         DeployMilestone(address(milestone));
+    }
+
+    function _deployMilestone(
+        string _name, 
+        string _url, 
+        uint64 _parentProject
+    ) internal returns(LiquidPledging liquidPledging, LPPCappedMilestone milestone, uint64 idProject) 
+    {
+        address milestoneBase = kernel.getApp(MILESTONE_APP);
+        require(milestoneBase != 0);
+        liquidPledging = LiquidPledging(kernel.getApp(LP_APP_INSTANCE));
+        require(address(liquidPledging) != 0);
+
+        milestone = LPPCappedMilestone(newAppProxy(kernel, MILESTONE_APP_ID));
+        liquidPledging.addValidPluginInstance(address(milestone));
+
+        idProject = liquidPledging.addProject(
+            _name,
+            _url,
+            address(milestone),
+            _parentProject,
+            0,
+            ILiquidPledgingPlugin(milestone)
+        );  
     }
 
     function _setPermissions(
@@ -103,21 +117,5 @@ contract LPPCappedMilestoneFactory is LPConstants, Escapable, AppProxyFactory {
         acl.createPermission(recipient, address(milestone), recipientRole, address(milestone));
         acl.createPermission(escapeHatchCaller, address(milestone), hatchCallerRole, escapeHatchCaller);
         acl.createPermission(milestoneManager, address(milestone), manageRole, milestoneManager);
-    }
-
-
-    function _init(
-        address liquidPledging
-    ) internal returns (LPPCappedMilestone)
-    {
-        LPPCappedMilestone milestone = LPPCappedMilestone(newAppProxy(kernel, MILESTONE_APP_ID));
-        
-        LiquidPledging(liquidPledging).addValidPluginInstance(address(milestone));
-
-        milestone.initializeLP(name, url, liquidPledging, parentProject);
-        milestone.initializeCap(maxAmount, acceptedToken);
-        milestone.initialize(escapeHatchDestination, reviewer, campaignReviewer, recipient, milestoneManager, reviewTimeoutSeconds);
-        
-        return milestone;
     }
 }
