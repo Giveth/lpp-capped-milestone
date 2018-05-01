@@ -69,8 +69,6 @@ contract LPPCappedMilestoneFactory is LPConstants, Escapable, AppProxyFactory {
             idProject
         );
 
-        _setPermissions(milestone, _reviewer, _recipient, _milestoneManager, _escapeHatchCaller);
-
         DeployMilestone(address(milestone));
     }
 
@@ -96,26 +94,5 @@ contract LPPCappedMilestoneFactory is LPConstants, Escapable, AppProxyFactory {
             0,
             ILiquidPledgingPlugin(milestone)
         );  
-    }
-
-    function _setPermissions(
-        LPPCappedMilestone milestone,
-        address reviewer,
-        address recipient,
-        address milestoneManager,
-        address escapeHatchCaller
-    ) internal
-    {
-        ACL acl = ACL(kernel.acl());
-
-        bytes32 hatchCallerRole = milestone.ESCAPE_HATCH_CALLER_ROLE();
-        bytes32 reviewerRole = milestone.REVIEWER_ROLE();
-        bytes32 recipientRole = milestone.RECIPIENT_ROLE();
-        bytes32 manageRole = milestone.MANAGER_ROLE();
-
-        acl.createPermission(reviewer, address(milestone), reviewerRole, address(milestone));
-        acl.createPermission(recipient, address(milestone), recipientRole, address(milestone));
-        acl.createPermission(escapeHatchCaller, address(milestone), hatchCallerRole, escapeHatchCaller);
-        acl.createPermission(milestoneManager, address(milestone), manageRole, milestoneManager);
     }
 }

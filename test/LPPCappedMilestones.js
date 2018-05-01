@@ -318,13 +318,15 @@ describe('LPPCappedMilestone test', function() {
       );
     });
 
+    // both multiple pledges as a single pledge withdraw must fail
     await assertFail(milestone.mWithdraw(encodedPledges, { from: recipient1, gas: 4000000 }));
+    await assertFail(milestone.withdraw(2, 100, { from: recipient1, gas: 4000000 }));
   });
 
   it('Only Milestone Manager can request a milestone as complete', async () => {
     // check that other roles cannot mark as complete
-    await assertFail(milestone.requestMarkAsComplete(1, { from: recipient1, gas: 4000000 }));
-    await assertFail(milestone.requestMarkAsComplete(1, { from: giver1, gas: 4000000 }));
+    await assertFail(milestone.requestMarkAsComplete({ from: recipient1, gas: 4000000 }));
+    await assertFail(milestone.requestMarkAsComplete({ from: giver1, gas: 4000000 }));
 
     // check that state of milestone didn't change
     requestComplete = await milestone.requestComplete();
@@ -335,7 +337,7 @@ describe('LPPCappedMilestone test', function() {
     assert.equal(completed, false);
 
     // milestone manager can request mark as complete
-    await milestone.requestMarkAsComplete(1, { from: milestoneManager1, gas: 4000000 });
+    await milestone.requestMarkAsComplete({ from: milestoneManager1, gas: 4000000 });
 
     // check that state of milestone changed
     requestComplete = await milestone.requestComplete();
@@ -348,11 +350,11 @@ describe('LPPCappedMilestone test', function() {
 
   it('Only Reviewer can reject a milestone as complete', async () => {
     // request mark as complete
-    await milestone.requestMarkAsComplete(1, { from: milestoneManager1, gas: 4000000 });
+    await milestone.requestMarkAsComplete({ from: milestoneManager1, gas: 4000000 });
 
     // check that other roles cannot reject completion
-    await assertFail(milestone.rejectCompleteRequest(1, { from: giver1, gas: 4000000 }));
-    await assertFail(milestone.rejectCompleteRequest(1, { from: milestoneManager1, gas: 4000000 }));
+    await assertFail(milestone.rejectCompleteRequest({ from: giver1, gas: 4000000 }));
+    await assertFail(milestone.rejectCompleteRequest({ from: milestoneManager1, gas: 4000000 }));
 
     // check that state of milestone didn't change
     completed = await milestone.completed();
@@ -361,7 +363,7 @@ describe('LPPCappedMilestone test', function() {
     assert.equal(completed, false);
 
     // reviewer can reject complete request
-    await milestone.rejectCompleteRequest(1, { from: reviewer1, gas: 4000000 });
+    await milestone.rejectCompleteRequest({ from: reviewer1, gas: 4000000 });
 
     // check that state of milestone changed
     completed = await milestone.completed();
@@ -372,12 +374,12 @@ describe('LPPCappedMilestone test', function() {
 
   it('Only Reviewer can mark a milestone as complete', async () => {
     // mark as complete
-    await milestone.requestMarkAsComplete(1, { from: milestoneManager1, gas: 4000000 });
+    await milestone.requestMarkAsComplete({ from: milestoneManager1, gas: 4000000 });
 
     // check that other roles cannot approve completion
-    await assertFail(milestone.approveMilestoneCompleted(1, { from: recipient1, gas: 4000000 }));
+    await assertFail(milestone.approveMilestoneCompleted({ from: recipient1, gas: 4000000 }));
     await assertFail(
-      milestone.approveMilestoneCompleted(1, { from: milestoneManager1, gas: 4000000 }),
+      milestone.approveMilestoneCompleted({ from: milestoneManager1, gas: 4000000 }),
     );
 
     // check that state of milestone changed
@@ -385,7 +387,7 @@ describe('LPPCappedMilestone test', function() {
     assert.equal(completed, false);
 
     // only reviewer can mark as complete
-    await milestone.approveMilestoneCompleted(1, { from: reviewer1, gas: 4000000 });
+    await milestone.approveMilestoneCompleted({ from: reviewer1, gas: 4000000 });
 
     // check that state of milestone changed
     completed = await milestone.completed();
@@ -437,9 +439,12 @@ describe('LPPCappedMilestone test', function() {
     await assertFail(milestone.mWithdraw(encodedPledges, { from: reviewer1, gas: 4000000 }));
 
     // recipient can withdraw
-    // NOTE: this tx just fails for some reason I can't figure out
     res = await milestone.mWithdraw(encodedPledges, { from: recipient1, gas: 4000000 });
     assert.equal(res.status, '0x01');
+
+    // recipient can withdraw a single pledge
+    res = await milestone.withdraw(2, 20, { from: recipient1, gas: 4000000 });
+    assert.equal(res.status, '0x01');    
   });
 
   it('Only reviewer can request changing reviewer', async () => {
@@ -544,11 +549,11 @@ describe('LPPCappedMilestone test', function() {
   });
 
   it('Nobody else but Reviewer and Milestone Manager can cancel milestone', async () => {
-    await assertFail(milestone.cancelMilestone(1, { from: recipient2, gas: 4000000 }));
-    await assertFail(milestone.cancelMilestone(1, { from: giver1, gas: 4000000 }));
+    await assertFail(milestone.cancelMilestone({ from: recipient2, gas: 4000000 }));
+    await assertFail(milestone.cancelMilestone({ from: giver1, gas: 4000000 }));
 
     // reviewer can cancel
-    await milestone.cancelMilestone(1, { from: reviewer2, gas: 4000000 });
+    await milestone.cancelMilestone({ from: reviewer2, gas: 4000000 });
 
     let canceled = await liquidPledging.isProjectCanceled(1, { gas: 400000 });
     assert.equal(canceled, true);
@@ -575,14 +580,14 @@ describe('LPPCappedMilestone test', function() {
     milestone = new LPPCappedMilestone(web3, lpManager.plugin);
 
     // milestone manager can cancel
-    await milestone.cancelMilestone(4, { from: milestoneManager1, gas: 4000000 });
+    await milestone.cancelMilestone({ from: milestoneManager1, gas: 4000000 });
 
     canceled = await liquidPledging.isProjectCanceled(4, { gas: 400000 });
     assert.equal(canceled, true);
   });
 
   it('A canceled milestone cannot be canceled again', async () => {
-    await assertFail(milestone.cancelMilestone(4, { from: milestoneManager1, gas: 4000000 }));
+    await assertFail(milestone.cancelMilestone({ from: milestoneManager1, gas: 4000000 }));
   });
 
   it('Canceled milestone should not accept new donations', async () => {

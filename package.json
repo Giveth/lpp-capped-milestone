@@ -18,7 +18,13 @@
     "type": "git",
     "url": "git+https://github.com/Giveth/lpp-capped-milestone.git"
   },
-  "keywords": ["liquid", "pledging", "ethereum", "solidity", "milestone"],
+  "keywords": [
+    "liquid",
+    "pledging",
+    "ethereum",
+    "solidity",
+    "milestone"
+  ],
   "author": "perissology",
   "license": "GPL-3.0",
   "bugs": {

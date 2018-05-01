@@ -41,10 +41,6 @@ contract LPPCappedMilestone is EscapableApp {
     uint constant TO_OWNER = 256;
     uint constant TO_INTENDEDPROJECT = 511;
 
-    bytes32 public constant MANAGER_ROLE = keccak256("MANAGER_ROLE");
-    bytes32 public constant REVIEWER_ROLE = keccak256("REVIEWER_ROLE");
-    bytes32 public constant RECIPIENT_ROLE = keccak256("RECIPIENT_ROLE");
-
     LiquidPledging public liquidPledging;
     uint64 public idProject;
 
@@ -59,7 +55,6 @@ contract LPPCappedMilestone is EscapableApp {
     uint public received = 0;
     bool public requestComplete;
     bool public completed;
-    bool public paid;
 
     // @notice After marking complete, and after this timeout, the recipient can withdraw the money
     // even if the milestone was not marked as complete.
@@ -78,6 +73,36 @@ contract LPPCappedMilestone is EscapableApp {
     event MilestoneRecipientChanged(address indexed liquidPledging, uint64 indexed idProject, address recipient);
 
     event PaymentCollected(address indexed liquidPledging, uint64 indexed idProject);
+
+
+    modifier onlyReviewer() {
+        require(msg.sender == reviewer);
+        _;
+    }
+
+    modifier onlyCampaignReviewer() {
+        require(msg.sender == campaignReviewer);
+        _;
+    }
+
+    modifier onlyRecipient() {
+        require(msg.sender == recipient);
+        _;
+    }   
+
+    modifier onlyManager() {
+        require(msg.sender == milestoneManager);
+        _;
+    }           
+
+    modifier checkReviewTimeout() { 
+        if (reviewTimeout > 0 && now > reviewTimeout) {
+            completed = true;
+        }
+        require(completed);
+        _; 
+    }
+    
 
     function LPPCappedMilestone(address _escapeHatchDestination) EscapableApp(_escapeHatchDestination) public {}
 
@@ -121,7 +146,6 @@ contract LPPCappedMilestone is EscapableApp {
         acceptedToken = _acceptedToken;
         reviewer = _reviewer;        
         recipient = _recipient;
-        completed = false;
         reviewTimeoutSeconds = _reviewTimeoutSeconds;
 
         // @dev these are not actually used but we store them 
@@ -129,13 +153,6 @@ contract LPPCappedMilestone is EscapableApp {
         campaignReviewer = _campaignReviewer;
         milestoneManager = _milestoneManager;        
     }
-
-
-    //== internal
-
-    function _hasRole(bytes32 role) internal returns(bool) {
-        return canPerform(msg.sender, role, new uint[](0));
-    }        
 
 
     //== external
@@ -148,12 +165,8 @@ contract LPPCappedMilestone is EscapableApp {
     // @notice Milestone manager can request to mark a milestone as completed
     // When he does, the timeout is initiated. So if the reviewer doesn't
     // handle the request in time, the recipient can withdraw the funds
-    function requestMarkAsComplete(uint64 idProject) external {
-        require(_hasRole(MANAGER_ROLE));
+    function requestMarkAsComplete() onlyManager external {
         require(!isCanceled());
-
-        // @dev we need to check so the reviewTimeout cannot
-        // be set higher and higher resulting in overflow.
         require(!requestComplete);
 
         requestComplete = true;
@@ -165,12 +178,12 @@ contract LPPCappedMilestone is EscapableApp {
 
     // @notice The reviewer can reject a completion request from the milestone manager
     // When he does, the timeout is reset.
-    function rejectCompleteRequest(uint64 idProject) external {
-        require(_hasRole(REVIEWER_ROLE));
+    function rejectCompleteRequest() onlyReviewer external {
         require(!isCanceled());
 
         // reset 
         completed = false;
+        requestComplete = false;
         reviewTimeout = 0;
         MilestoneCompleteRequestRejected(liquidPledging, idProject);
     }   
@@ -178,25 +191,24 @@ contract LPPCappedMilestone is EscapableApp {
     // @notice The reviewer can approve a completion request from the milestone manager
     // When he does, the milestone's state is set to completed and the funds can be
     // withdrawn by the recipient.
-    function approveMilestoneCompleted(uint64 idProject) external {
-        require(_hasRole(REVIEWER_ROLE));
+    function approveMilestoneCompleted() onlyReviewer external {
         require(!isCanceled());
-        require(requestComplete);
 
         completed = true;
         MilestoneCompleteRequestApproved(liquidPledging, idProject);         
     }
 
     // @notice The reviewer and the milestone manager can cancel a milestone.
-    function cancelMilestone(uint64 idProject) external {
-        require(_hasRole(MANAGER_ROLE) || _hasRole(REVIEWER_ROLE));
+    function cancelMilestone() external {
+        require(msg.sender == milestoneManager || msg.sender == reviewer);
         require(!isCanceled());
 
         liquidPledging.cancelProject(idProject);
     }    
 
     // @notice The reviewer can request changing a reviewer.
-    function requestChangeReviewer(address _newReviewer) external auth(REVIEWER_ROLE) {
+    function requestChangeReviewer(address _newReviewer) external {
+        require(msg.sender == reviewer);
         newReviewer = _newReviewer;
 
         MilestoneChangeReviewerRequested(liquidPledging, idProject, newReviewer);                 
@@ -209,10 +221,6 @@ contract LPPCappedMilestone is EscapableApp {
     function acceptNewReviewerRequest() external {
         require(newReviewer == msg.sender);
 
-        ACL acl = ACL(kernel.acl());
-        acl.revokePermission(reviewer, address(this), REVIEWER_ROLE);
-        acl.grantPermission(newReviewer, address(this), REVIEWER_ROLE);
-
         reviewer = newReviewer;
         newReviewer = 0;
 
@@ -222,7 +230,7 @@ contract LPPCappedMilestone is EscapableApp {
     // @notice The recipient can request changing recipient.
     // @dev There's no point in adding a rejectNewRecipient because as long as
     // the new recipient doesn't accept, it old recipient remains the recipient.
-    function requestChangeRecipient(address _newRecipient) external auth(REVIEWER_ROLE) {
+    function requestChangeRecipient(address _newRecipient) onlyReviewer external {
         newRecipient = _newRecipient;
 
         MilestoneChangeRecipientRequested(liquidPledging, idProject, newRecipient);                 
@@ -232,10 +240,6 @@ contract LPPCappedMilestone is EscapableApp {
     // recipient to become the new recipient.
     function acceptNewRecipient() external {
         require(newRecipient == msg.sender);
-
-        ACL acl = ACL(kernel.acl());
-        acl.revokePermission(recipient, address(this), RECIPIENT_ROLE);
-        acl.grantPermission(newRecipient, address(this), RECIPIENT_ROLE);
 
         recipient = newRecipient;
         newRecipient = 0;
@@ -259,10 +263,9 @@ contract LPPCappedMilestone is EscapableApp {
         require(msg.sender == address(liquidPledging));
         
         // if acceptedToken is set, only accept that token
-        if (acceptedToken != 0)
-            if(token != acceptedToken) {
-                return 0;
-            }
+        if(acceptedToken != 0 && token != acceptedToken) {
+            return 0;
+        }
 
         var (, , , fromIntendedProject, , , ,) = liquidPledging.getPledge(pledgeFrom);
         var (, toOwner, , , , , ,toPledgeState) = liquidPledging.getPledge(pledgeTo);
@@ -334,29 +337,28 @@ contract LPPCappedMilestone is EscapableApp {
 
     // @notice Allows the recipient to withdraw money from the vault to this milestone.
     // Checks if reviewTimeout has passed, if so, sets completed to yes
-    function mWithdraw(uint[] pledgesAmounts) external auth(RECIPIENT_ROLE) {        
-        if (reviewTimeout > 0 && now > reviewTimeout) {
-            completed = true;
-        }
-
-        require(completed);
-
+    function mWithdraw(uint[] pledgesAmounts) onlyRecipient checkReviewTimeout external {        
         liquidPledging.mWithdraw(pledgesAmounts);
     }
 
+
+    // @notice Allows the recipient to withdraw money of a single pledge, from the vault to this milestone.
+    // Checks if reviewTimeout has passed, if so, sets completed to yes
+    function withdraw(uint64 idPledge, uint amount) onlyRecipient checkReviewTimeout external {        
+        liquidPledging.withdraw(idPledge, amount);
+    }
+
+
     // @notice Allows the recipient to collect ether or tokens from this milestones
-    function collect(uint64 idProject, address _token) external auth(RECIPIENT_ROLE) {
-        require(!paid);
+    function collect(address _token) onlyRecipient external {
         
         // check for ether or token
         if (_token == address(0x0)) {
-            paid = true;
             recipient.transfer(this.balance);
         } else {
             ERC20 milestoneToken = ERC20(_token);
             assert(milestoneToken.balanceOf(this) >= received);
             
-            paid = true;
             require(milestoneToken.transfer(recipient, received));
         }
 
