@@ -207,8 +207,7 @@ contract LPPCappedMilestone is EscapableApp {
     }    
 
     // @notice The reviewer can request changing a reviewer.
-    function requestChangeReviewer(address _newReviewer) external {
-        require(msg.sender == reviewer);
+    function requestChangeReviewer(address _newReviewer) onlyReviewer external {
         newReviewer = _newReviewer;
 
         MilestoneChangeReviewerRequested(liquidPledging, idProject, newReviewer);                 
