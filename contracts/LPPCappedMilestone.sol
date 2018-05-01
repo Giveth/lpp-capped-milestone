@@ -260,8 +260,8 @@ contract LPPCappedMilestone is EscapableApp {
     {
         require(msg.sender == address(liquidPledging));
         
-        // if acceptedToken is set, only accept that token
-        if(acceptedToken != 0 && token != acceptedToken) {
+        // only accept that token
+        if(token != acceptedToken) {
             return 0;
         }
 
@@ -337,29 +337,37 @@ contract LPPCappedMilestone is EscapableApp {
     // Checks if reviewTimeout has passed, if so, sets completed to yes
     function mWithdraw(uint[] pledgesAmounts) onlyRecipient checkReviewTimeout external {        
         liquidPledging.mWithdraw(pledgesAmounts);
+        _collect();        
     }
-
 
     // @notice Allows the recipient to withdraw money of a single pledge, from the vault to this milestone.
     // Checks if reviewTimeout has passed, if so, sets completed to yes
     function withdraw(uint64 idPledge, uint amount) onlyRecipient checkReviewTimeout external {        
         liquidPledging.withdraw(idPledge, amount);
+        _collect();
     }
 
 
     // @notice Allows the recipient to collect ether or tokens from this milestones
-    function collect(address _token) onlyRecipient external {
-        
+    function collect() onlyRecipient checkReviewTimeout external {
+        require(_collect());
+    }
+
+    function _collect() internal returns (bool result) {
         // check for ether or token
-        if (_token == address(0x0)) {
-            recipient.transfer(this.balance);
+        if (acceptToken == address(0x0)) {
+            result = recipient.send(this.balance);
         } else {
-            ERC20 milestoneToken = ERC20(_token);
-            assert(milestoneToken.balanceOf(this) >= received);
-            
-            require(milestoneToken.transfer(recipient, received));
+            ERC20 milestoneToken = ERC20(acceptToken);
+
+            uint amount = milestoneToken.balanceOf(this);
+            result = milestoneToken.transfer(recipient, amount);
         }
 
-        PaymentCollected(liquidPledging, idProject);
+        if (result) {
+            PaymentCollected(liquidPledging, idProject);            
+        }
+
+        return result;    
     }
 }
