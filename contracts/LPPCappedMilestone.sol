@@ -1,4 +1,4 @@
-pragma solidity ^0.4.17;
+pragma solidity 0.4.18;
 
 /*
     Copyright 2017, RJ Ewing <perissology@protonmail.com>
@@ -146,13 +146,9 @@ contract LPPCappedMilestone is EscapableApp {
         reviewer = _reviewer;        
         recipient = _recipient;
         reviewTimeoutSeconds = _reviewTimeoutSeconds;
-
-        // @dev these are not actually used but we store them 
-        // in the contract for transparency.
         campaignReviewer = _campaignReviewer;
         milestoneManager = _milestoneManager;        
     }
-
 
     //== external
 
@@ -261,7 +257,7 @@ contract LPPCappedMilestone is EscapableApp {
         require(msg.sender == address(liquidPledging));
         
         // only accept that token
-        if(token != acceptedToken) {
+        if (token != acceptedToken) {
             return 0;
         }
 
@@ -347,24 +343,26 @@ contract LPPCappedMilestone is EscapableApp {
         _collect();
     }
 
-
     // @notice Allows the recipient to collect ether or tokens from this milestones
     function collect() onlyRecipient checkReviewTimeout external {
         require(_collect());
     }
 
     function _collect() internal returns (bool result) {
-        // check for ether or token
-        if (acceptToken == address(0x0)) {
-            result = recipient.send(this.balance);
-        } else {
-            ERC20 milestoneToken = ERC20(acceptToken);
+        uint amount;
 
-            uint amount = milestoneToken.balanceOf(this);
+        // check for ether or token
+        if (acceptedToken == address(0x0)) {
+            amount = this.balance;
+            result = recipient.send(amount);
+        } else {
+            ERC20 milestoneToken = ERC20(acceptedToken);
+
+            amount = milestoneToken.balanceOf(this);
             result = milestoneToken.transfer(recipient, amount);
         }
 
-        if (result) {
+        if (result && amount > 0) {
             PaymentCollected(liquidPledging, idProject);            
         }
 
