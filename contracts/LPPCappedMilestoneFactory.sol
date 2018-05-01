@@ -14,19 +14,6 @@ contract LPPCappedMilestoneFactory is LPConstants, Escapable, AppProxyFactory {
     bytes32 constant public MILESTONE_APP = keccak256(APP_BASES_NAMESPACE, MILESTONE_APP_ID);
     bytes32 constant public LP_APP_INSTANCE = keccak256(APP_ADDR_NAMESPACE, LP_APP_ID);
 
-    string name;
-    string url;
-    uint64 parentProject;
-    address reviewer;
-    address escapeHatchCaller;
-    address escapeHatchDestination;
-    address recipient;
-    address campaignReviewer;
-    address milestoneManager;
-    uint maxAmount;
-    address acceptedToken;
-    uint reviewTimeoutSeconds;
-
     event DeployMilestone(address milestone);
 
     function LPPCappedMilestoneFactory(address _kernel, address _escapeHatchCaller, address _escapeHatchDestination)

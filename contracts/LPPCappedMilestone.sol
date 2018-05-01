@@ -20,7 +20,6 @@ pragma solidity ^0.4.17;
 import "giveth-liquidpledging/contracts/LiquidPledging.sol";
 import "giveth-liquidpledging/contracts/EscapableApp.sol";
 import "giveth-common-contracts/contracts/ERC20.sol";
-import "@aragon/os/contracts/acl/ACL.sol";
 import "@aragon/os/contracts/kernel/KernelProxy.sol";
 import "@aragon/os/contracts/kernel/Kernel.sol";
 
