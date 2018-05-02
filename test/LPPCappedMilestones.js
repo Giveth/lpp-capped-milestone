@@ -323,9 +323,9 @@ describe('LPPCappedMilestone test', function() {
     await assertFail(milestone.withdraw(2, 100, { from: recipient1, gas: 4000000 }));
   });
 
-  it('Only Milestone Manager can request a milestone as complete', async () => {
+  it('Milestone Manager can request a milestone as complete', async () => {
     // check that other roles cannot mark as complete
-    await assertFail(milestone.requestMarkAsComplete({ from: recipient1, gas: 4000000 }));
+    await assertFail(milestone.requestMarkAsComplete({ from: reviewer1, gas: 4000000 }));
     await assertFail(milestone.requestMarkAsComplete({ from: giver1, gas: 4000000 }));
 
     // check that state of milestone didn't change
@@ -372,10 +372,21 @@ describe('LPPCappedMilestone test', function() {
     assert.equal(completed, false);
   });
 
-  it('Only Reviewer can mark a milestone as complete', async () => {
+  it('Recipient can also request a milestone as complete', async () => {
     // mark as complete
-    await milestone.requestMarkAsComplete({ from: milestoneManager1, gas: 4000000 });
+    await milestone.requestMarkAsComplete({ from: recipient1, gas: 4000000 }); 
 
+    // check that state of milestone changed
+    requestComplete = await milestone.requestComplete();
+    completed = await milestone.completed();
+    reviewTimeout = await milestone.reviewTimeout();
+    assert.equal(requestComplete, true);
+    assert.notEqual(reviewTimeout, 0);
+    assert.equal(completed, false);
+
+  })
+
+  it('Only Reviewer can mark a milestone as complete', async () => {
     // check that other roles cannot approve completion
     await assertFail(milestone.approveMilestoneCompleted({ from: recipient1, gas: 4000000 }));
     await assertFail(

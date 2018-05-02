@@ -1,7 +1,9 @@
 pragma solidity 0.4.18;
 
 /*
-    Copyright 2017, RJ Ewing <perissology@protonmail.com>
+    Copyright 2017
+    RJ Ewing <perissology@protonmail.com>
+    S van Heummen <satya.vh@gmail.com>
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -160,7 +162,8 @@ contract LPPCappedMilestone is EscapableApp {
     // @notice Milestone manager can request to mark a milestone as completed
     // When he does, the timeout is initiated. So if the reviewer doesn't
     // handle the request in time, the recipient can withdraw the funds
-    function requestMarkAsComplete() onlyManager external {
+    function requestMarkAsComplete() external {
+        require(msg.sender == milestoneManager || msg.sender == recipient);
         require(!isCanceled());
         require(!requestComplete);
 
