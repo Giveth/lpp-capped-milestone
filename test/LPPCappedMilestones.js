@@ -488,6 +488,38 @@ describe('LPPCappedMilestone test', function() {
     assert.equal(newReviewer, 0);
   });
 
+
+ it('Only the campaign reviewer can request changing campaign reviewer', async () => {
+    await assertFail(milestone.requestChangeCampaignReviewer(giver1, { from: giver1, gas: 4000000 }));
+    await assertFail(
+      milestone.requestChangeCampaignReviewer(giver1, { from: milestoneManager1, gas: 4000000 }),
+    );
+    await assertFail(milestone.requestChangeCampaignReviewer(giver1, { from: recipient1, gas: 4000000 }));
+
+    newCampaignReviewer = await milestone.newCampaignReviewer();
+    assert.equal(newCampaignReviewer, '0x0000000000000000000000000000000000000000');
+
+    await milestone.requestChangeCampaignReviewer(campaignReviewer2, { from: campaignReviewer1, gas: 4000000 });
+    newCampaignReviewer = await milestone.newCampaignReviewer();
+    assert.equal(newCampaignReviewer, campaignReviewer2);
+  });
+
+  it('Only the new campaign reviewer can accept becoming the new campaign reviewer', async () => {
+    await assertFail(milestone.acceptNewCampaignReviewerRequest({ from: campaignReviewer1, gas: 4000000 }));
+    await assertFail(milestone.acceptNewCampaignReviewerRequest({ from: milestoneManager1, gas: 4000000 }));
+    await assertFail(milestone.acceptNewCampaignReviewerRequest({ from: recipient1, gas: 4000000 }));
+
+    campaignReviewer = await milestone.campaignReviewer();
+    assert.equal(campaignReviewer, campaignReviewer1);
+
+    await milestone.acceptNewCampaignReviewerRequest({ from: campaignReviewer2, gas: 4000000 });
+    campaignReviewer = await milestone.campaignReviewer();
+    newCampaignReviewer = await milestone.newCampaignReviewer();
+    assert.equal(campaignReviewer, campaignReviewer2);
+    assert.equal(newCampaignReviewer, 0);
+  });
+
+
   it('Only reviewer can request changing recipient', async () => {
     await assertFail(
       milestone.requestChangeRecipient(recipient2, { from: recipient1, gas: 4000000 }),

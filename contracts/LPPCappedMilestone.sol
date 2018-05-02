@@ -50,6 +50,7 @@ contract LPPCappedMilestone is EscapableApp {
     address public recipient;
     address public newRecipient;
     address public campaignReviewer;
+    address public newCampaignReviewer;
     address public milestoneManager;
     address public acceptedToken;
     uint public maxAmount;
@@ -69,6 +70,9 @@ contract LPPCappedMilestone is EscapableApp {
 
     event MilestoneChangeReviewerRequested(address indexed liquidPledging, uint64 indexed idProject, address reviewer);
     event MilestoneReviewerChanged(address indexed liquidPledging, uint64 indexed idProject, address reviewer);
+
+    event MilestoneChangeCampaignReviewerRequested(address indexed liquidPledging, uint64 indexed idProject, address reviewer);
+    event MilestoneCampaignReviewerChanged(address indexed liquidPledging, uint64 indexed idProject, address reviewer);
 
     event MilestoneChangeRecipientRequested(address indexed liquidPledging, uint64 indexed idProject, address recipient);
     event MilestoneRecipientChanged(address indexed liquidPledging, uint64 indexed idProject, address recipient);
@@ -214,7 +218,7 @@ contract LPPCappedMilestone is EscapableApp {
     // @notice The new reviewer needs to accept the request from the old
     // reviewer to become the new reviewer.
     // @dev There's no point in adding a rejectNewReviewer because as long as
-    // the new reviewer doesn't accept, it old reviewer remains the reviewer.    
+    // the new reviewer doesn't accept, the old reviewer remains the reviewer.    
     function acceptNewReviewerRequest() external {
         require(newReviewer == msg.sender);
 
@@ -224,9 +228,32 @@ contract LPPCappedMilestone is EscapableApp {
         MilestoneReviewerChanged(liquidPledging, idProject, reviewer);         
     }  
 
+
+    // @notice The campaign reviewer can request changing a campaign reviewer.
+    function requestChangeCampaignReviewer(address _newCampaignReviewer) onlyCampaignReviewer external {
+        newCampaignReviewer = _newCampaignReviewer;
+
+        MilestoneChangeCampaignReviewerRequested(liquidPledging, idProject, newReviewer);                 
+    }    
+
+    // @notice The new campaign reviewer needs to accept the request from the old
+    // campaign reviewer to become the new campaign reviewer.
+    // @dev There's no point in adding a rejectNewCampaignReviewer because as long as
+    // the new reviewer doesn't accept, the old reviewer remains the reviewer.    
+    function acceptNewCampaignReviewerRequest() external {
+        require(newCampaignReviewer == msg.sender);
+
+        campaignReviewer = newCampaignReviewer;
+        newCampaignReviewer = 0;
+
+        MilestoneCampaignReviewerChanged(liquidPledging, idProject, reviewer);         
+    }  
+
+
+
     // @notice The recipient can request changing recipient.
     // @dev There's no point in adding a rejectNewRecipient because as long as
-    // the new recipient doesn't accept, it old recipient remains the recipient.
+    // the new recipient doesn't accept, the old recipient remains the recipient.
     function requestChangeRecipient(address _newRecipient) onlyReviewer external {
         newRecipient = _newRecipient;
 
