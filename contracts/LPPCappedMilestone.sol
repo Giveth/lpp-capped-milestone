@@ -22,8 +22,8 @@ pragma solidity 0.4.18;
 import "giveth-liquidpledging/contracts/LiquidPledging.sol";
 import "giveth-liquidpledging/contracts/EscapableApp.sol";
 import "giveth-common-contracts/contracts/ERC20.sol";
-import "@aragon/os/contracts/kernel/KernelProxy.sol";
-import "@aragon/os/contracts/kernel/Kernel.sol";
+import "@aragon/os/contracts/kernel/IKernel.sol";
+import "giveth-bridge/contracts/IForeignGivethBridge.sol";
 
 
 /// @title LPPCappedMilestone
@@ -41,6 +41,8 @@ import "@aragon/os/contracts/kernel/Kernel.sol";
 contract LPPCappedMilestone is EscapableApp {
     uint constant TO_OWNER = 256;
     uint constant TO_INTENDEDPROJECT = 511;
+    // keccack256(Kernel.APP_ADDR_NAMESPACE(), keccack256("ForeignGivethBridge"))
+    bytes32 constant public FOREIGN_BRIDGE_INSTANCE = 0xa46b3f7f301ac0173ef5564df485fccae3b60583ddb12c767fea607ff6971d0b;
 
     LiquidPledging public liquidPledging;
     uint64 public idProject;
@@ -101,7 +103,7 @@ contract LPPCappedMilestone is EscapableApp {
     }           
 
     modifier checkReviewTimeout() { 
-        if (reviewTimeout > 0 && now > reviewTimeout) {
+        if (!completed && reviewTimeout > 0 && now > reviewTimeout) {
             completed = true;
         }
         require(completed);
@@ -138,6 +140,7 @@ contract LPPCappedMilestone is EscapableApp {
         require(_recipient != 0);
         require(_milestoneManager != 0);
         require(_liquidPledging != 0);
+        require(_acceptedToken != 0);
 
         super.initialize(_escapeHatchDestination);
 
@@ -375,27 +378,19 @@ contract LPPCappedMilestone is EscapableApp {
 
     // @notice Allows the recipient to collect ether or tokens from this milestones
     function collect() onlyRecipient checkReviewTimeout external {
-        require(_collect());
+        _collect();
     }
 
-    function _collect() internal returns (bool result) {
-        uint amount;
+    function _collect() internal {
+        IKernel kernel = liquidPledging.kernel();
+        IForeignGivethBridge bridge = IForeignGivethBridge(kernel.getApp(FOREIGN_BRIDGE_INSTANCE));
 
-        // check for ether or token
-        if (acceptedToken == address(0x0)) {
-            amount = this.balance;
-            result = recipient.send(amount);
-        } else {
-            ERC20 milestoneToken = ERC20(acceptedToken);
+        ERC20 milestoneToken = ERC20(acceptedToken);
+        uint amount = milestoneToken.balanceOf(this);
 
-            amount = milestoneToken.balanceOf(this);
-            result = milestoneToken.transfer(recipient, amount);
-        }
-
-        if (result && amount > 0) {
+        if (amount > 0) {
+            bridge.withdraw(recipient, acceptedToken, amount);
             PaymentCollected(liquidPledging, idProject);            
         }
-
-        return result;    
     }
 }

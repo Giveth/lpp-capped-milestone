@@ -11,6 +11,7 @@ const {
   test,
   LiquidPledgingState,
 } = require('giveth-liquidpledging');
+const { ForeignGivethBridge } = require('giveth-bridge');
 const { MiniMeToken, MiniMeTokenFactory, MiniMeTokenState } = require('minimetoken');
 const Web3 = require('web3');
 const { StandardTokenTest, LiquidPledgingMock, assertFail } = test;
@@ -41,6 +42,7 @@ describe('LPPCappedMilestone test', function() {
   let kernel;
   let vault;
   let milestones;
+  let bridge;
   let escapeHatchCaller;
   let escapeHatchDestination;
   let lpManager;
@@ -122,15 +124,39 @@ describe('LPPCappedMilestone test', function() {
     await acl.createPermission(
       accounts[0],
       vault.$address,
-      await vault.CONFIRM_PAYMENT_ROLE(),
+      await vault.SET_AUTOPAY_ROLE(),
       accounts[0],
       { $extraGas: 200000 },
     );
 
+    await vault.setAutopay(true, { from: accounts[0], $extraGas: 100000 });
+
+    const tokenFactory = await MiniMeTokenFactory.new(web3, { gas: 3000000 });
+
     // generate token for Giver
-    giver1Token = await StandardTokenTest.new(web3);
-    await giver1Token.mint(giver1, web3.utils.toWei('1000'));
+    giver1Token = await MiniMeToken.new(web3, tokenFactory.$address, 0, 0, 'Giver Token', 18, 'GT', true);
+    await giver1Token.generateTokens(giver1, web3.utils.toWei('1000'));
     await giver1Token.approve(liquidPledging.$address, '0xFFFFFFFFFFFFFFFF', { from: giver1 });
+
+    bridge = await ForeignGivethBridge.new(
+      web3,
+      accounts[0],
+      accounts[0],
+      tokenFactory.$address,
+      liquidPledging.$address,
+      [0],
+      [giver1Token.$address],
+      { from: accounts[0], $extraGas: 100000 },
+    );
+
+    await kernel.setApp(
+      await kernel.APP_ADDR_NAMESPACE(),
+      utils.keccak256("ForeignGivethBridge"),
+      bridge.$address,
+      { $extraGas: 200000 },
+    );
+
+    await giver1Token.changeController(bridge.$address);
 
     // generate random token
     someRandomToken = await StandardTokenTest.new(web3);
@@ -349,9 +375,6 @@ describe('LPPCappedMilestone test', function() {
   });
 
   it('Only Reviewer can reject a milestone as complete', async () => {
-    // request mark as complete
-    await milestone.requestMarkAsComplete({ from: milestoneManager1, gas: 4000000 });
-
     // check that other roles cannot reject completion
     await assertFail(milestone.rejectCompleteRequest({ from: giver1, gas: 4000000 }));
     await assertFail(milestone.rejectCompleteRequest({ from: milestoneManager1, gas: 4000000 }));
@@ -450,12 +473,21 @@ describe('LPPCappedMilestone test', function() {
     await assertFail(milestone.mWithdraw(encodedPledges, { from: reviewer1, gas: 4000000 }));
 
     // recipient can withdraw
-    res = await milestone.mWithdraw(encodedPledges, { from: recipient1, gas: 4000000 });
-    assert.equal(res.status, '0x01');
+    res = await milestone.mWithdraw(encodedPledges, { from: recipient1, $extraGas: 100000 });
+    let fromBlock = await web3.eth.getBlockNumber();
+    let bridgeEvents = await bridge.$contract.getPastEvents('Withdraw', {fromBlock});
+    // ensure the Withdraw event was emitted from bridge
+    assert.equal(bridgeEvents.length, 1);
+    assert.equal(bridgeEvents[0].transactionHash, res.transactionHash);
 
     // recipient can withdraw a single pledge
-    res = await milestone.withdraw(2, 20, { from: recipient1, gas: 4000000 });
-    assert.equal(res.status, '0x01');    
+    res = await milestone.withdraw(2, 20, { from: recipient1, $extraGas: 100000 });
+    fromBlock = await web3.eth.getBlockNumber();
+    bridgeEvents = await bridge.$contract.getPastEvents('Withdraw', {fromBlock});
+
+    // ensure the Withdraw event was emitted from bridge
+    assert.equal(bridgeEvents.length, 1);
+    assert.equal(bridgeEvents[0].transactionHash, res.transactionHash);
   });
 
   it('Only reviewer can request changing reviewer', async () => {
@@ -637,10 +669,9 @@ describe('LPPCappedMilestone test', function() {
     receivedBeforeDonation = await milestone.received();
 
     // donate to milestone
-    await liquidPledging.donate(2, 4, giver1Token.$address, 150, { from: giver1, gas: 4000000 });
-
-    // donation is not accepted
-    receivedAfterDonation = await milestone.received();
-    assert.equal(receivedBeforeDonation, receivedAfterDonation);
+    // donating to a canceled milestone should throw
+    await assertFail(
+      liquidPledging.donate(2, 4, giver1Token.$address, 150, { from: giver1, gas: 4000000 })
+    );
   });
 });
