@@ -35,7 +35,7 @@
   "dependencies": {
     "@aragon/os": "3.0.4",
     "chai": "^4.1.2",
-    "giveth-bridge": "0.0.9",
+    "giveth-bridge": "0.0.10",
     "giveth-common-contracts": "0.4.0",
     "giveth-liquidpledging": "0.1.1",
     "minimetoken": "^0.2.0"

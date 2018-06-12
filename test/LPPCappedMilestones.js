@@ -144,6 +144,7 @@ describe('LPPCappedMilestone test', function() {
       accounts[0],
       tokenFactory.$address,
       liquidPledging.$address,
+      accounts[0],
       [0],
       [giver1Token.$address],
       { from: accounts[0], $extraGas: 100000 },
