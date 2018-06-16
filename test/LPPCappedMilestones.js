@@ -1,6 +1,6 @@
 /* eslint-env mocha */
 /* eslint-disable no-await-in-loop */
-const TestRPC = require('ganache-cli');
+const Ganache = require('ganache-cli');
 const { assert } = require('chai');
 const { LPPCappedMilestone, LPPCappedMilestoneFactory } = require('../index');
 const {
@@ -14,7 +14,7 @@ const {
 const { ForeignGivethBridge } = require('giveth-bridge');
 const { MiniMeToken, MiniMeTokenFactory, MiniMeTokenState } = require('minimetoken');
 const Web3 = require('web3');
-const { StandardTokenTest, LiquidPledgingMock, assertFail } = test;
+const { StandardTokenTest, assertFail, deployLP } = test;
 
 const { utils } = Web3;
 
@@ -41,13 +41,9 @@ describe('LPPCappedMilestone test', function() {
   let liquidPledgingState;
   let kernel;
   let vault;
-  let milestones;
   let bridge;
-  let escapeHatchCaller;
-  let escapeHatchDestination;
   let lpManager;
   let giver1;
-  let giver2;
   let delegate1;
   let milestoneManager1;
   let recipient1;
@@ -61,15 +57,14 @@ describe('LPPCappedMilestone test', function() {
   let maxAmount = 100;
   let idReceiver = 1;
   let idGiver1;
-  let idGiver2;
   let newReviewer;
   let newRecipient;
   let completed;
 
   before(async () => {
-    testrpc = TestRPC.server({
+    testrpc = Ganache.server({
       ws: true,
-      gasLimit: 9700000,
+      gasLimit: 6700000,
       total_accounts: 11,
     });
 
@@ -78,9 +73,6 @@ describe('LPPCappedMilestone test', function() {
     web3 = new Web3('ws://localhost:8545');
     accounts = await web3.eth.getAccounts();
 
-    escapeHatchCaller = accounts[0];
-    escapeHatchDestination = accounts[1];
-    giver1 = accounts[2];
     giver2 = accounts[3];
     milestoneManager1 = accounts[4];
     recipient1 = accounts[5];
@@ -89,27 +81,12 @@ describe('LPPCappedMilestone test', function() {
     recipient2 = accounts[8];
     reviewer2 = accounts[9];
     campaignReviewer2 = accounts[10];
-  });
 
-  after(done => {
-    testrpc.close();
-    done();
-  });
-
-  it('Should deploy LiquidPledging contract', async () => {
-    const baseVault = await LPVault.new(web3, accounts[0]);
-    const baseLP = await test.LiquidPledgingMock.new(web3, accounts[0]);
-    const lpFactory = await LPFactory.new(web3, baseVault.$address, baseLP.$address);
-
-    const r = await lpFactory.newLP(accounts[0], accounts[1], { $extraGas: 200000 });
-
-    const vaultAddress = r.events.DeployVault.returnValues.vault;
-    vault = new LPVault(web3, vaultAddress);
-
-    const lpAddress = r.events.DeployLiquidPledging.returnValues.liquidPledging;
-    liquidPledging = new test.LiquidPledgingMock(web3, lpAddress);
-
-    liquidPledgingState = new LiquidPledgingState(liquidPledging);
+    const deployment = await deployLP(web3);
+    giver1 = deployment.giver1;
+    vault = deployment.vault;
+    liquidPledging = deployment.liquidPledging;
+    liquidPledgingState = deployment.liquidPledgingState;
 
     // set permissions
     kernel = new Kernel(web3, await liquidPledging.kernel());
@@ -158,7 +135,14 @@ describe('LPPCappedMilestone test', function() {
     );
 
     await giver1Token.changeController(bridge.$address);
+  });
 
+  after(done => {
+    testrpc.close();
+    done();
+  });
+
+  it('Should deploy LiquidPledging contract', async () => {
     // generate random token
     someRandomToken = await StandardTokenTest.new(web3);
     await someRandomToken.mint(giver1, web3.utils.toWei('1000'));
@@ -167,8 +151,6 @@ describe('LPPCappedMilestone test', function() {
     factory = await LPPCappedMilestoneFactory.new(
       web3,
       kernel.$address,
-      escapeHatchCaller,
-      giver1,
       { gas: 6000000 },
     );
     await acl.grantPermission(factory.$address, acl.$address, await acl.CREATE_PERMISSIONS_ROLE(), {
@@ -181,7 +163,7 @@ describe('LPPCappedMilestone test', function() {
       { $extraGas: 200000 },
     );
 
-    const milestoneApp = await LPPCappedMilestone.new(web3, escapeHatchCaller);
+    const milestoneApp = await LPPCappedMilestone.new(web3);
     await kernel.setApp(
       await kernel.APP_BASES_NAMESPACE(),
       await factory.MILESTONE_APP_ID(),
@@ -194,8 +176,6 @@ describe('LPPCappedMilestone test', function() {
       'URL1',
       0,
       reviewer1,
-      escapeHatchCaller,
-      giver1,
       recipient1,
       campaignReviewer1,
       milestoneManager1,
@@ -224,6 +204,8 @@ describe('LPPCappedMilestone test', function() {
     const mRecipient = await milestone.recipient();
     const mMaxAmount = await milestone.maxAmount();
     const mAccepted = await milestone.completed();
+
+    assert.isAbove(Number(await milestone.getInitializationBlock()), 0);
 
     assert.equal(mReviewer, reviewer1);
     assert.equal(mCampaignReviewer, campaignReviewer1);
@@ -640,8 +622,6 @@ describe('LPPCappedMilestone test', function() {
       'URL1',
       0,
       reviewer1,
-      escapeHatchCaller,
-      giver1,
       recipient1,
       campaignReviewer1,
       milestoneManager1,
@@ -674,5 +654,11 @@ describe('LPPCappedMilestone test', function() {
     await assertFail(
       liquidPledging.donate(2, 4, giver1Token.$address, 150, { from: giver1, gas: 4000000 })
     );
+  });
+
+  it('Should reject "escapeHatch" attempts for acceptedToken', async function() {
+    await assertFail(milestone.transferToVault(giver1Token.$address, { from: recipient1, gas: 6700000 }));
+    assert.equal(await milestone.allowRecoverability(0x0), true);
+    assert.equal(await milestone.allowRecoverability(giver1Token.$address), false);
   });
 });

@@ -1,18 +1,16 @@
 {
   "name": "lpp-capped-milestone",
-  "version": "0.1.5",
+  "version": "1.0.0-beta.0",
   "description": "Contract for generating capped milestone with reviewer for liquidpledging.",
   "main": "index.js",
   "directories": {
     "lib": "lib"
   },
   "scripts": {
-    "test": "npm run sol-compile && mocha --harmony",
-    "sol-compile": "solcpiler --solc-version v0.4.18+commit.9cf6e910",
-    "js-compile": "babel --source-maps -d lib/ js/",
+    "test": "npm run compile && mocha --harmony",
+    "compile": "solcpiler --solc-version v0.4.18+commit.9cf6e910",
     "lint": "solium --dir contracts",
-    "clean": "rm -rf lib/ build/",
-    "compile": "npm run sol-compile; npm run js-compile",
+    "clean": "rm -rf build/",
     "prepublish": "npm run clean && npm run compile"
   },
   "repository": {
@@ -33,22 +31,21 @@
   },
   "homepage": "https://github.com/Giveth/lpp-capped-milestones#readme",
   "dependencies": {
-    "@aragon/os": "3.0.4",
+    "@aragon/os": "3.1.9",
     "chai": "^4.1.2",
-    "giveth-bridge": "0.0.10",
-    "giveth-common-contracts": "0.4.0",
-    "giveth-liquidpledging": "0.1.1",
+    "giveth-bridge": "1.0.0-beta.1",
+    "giveth-liquidpledging": "1.0.0-beta.2",
     "minimetoken": "^0.2.0"
   },
   "devDependencies": {
     "babel-cli": "^6.26.0",
     "babel-preset-env": "^1.6.0",
     "eslint": "^4.3.0",
-    "eth-contract-class": "0.0.8",
-    "ganache-cli": "6.1.2",
+    "eth-contract-class": "0.0.10",
+    "ganache-cli": "^6.1.2",
     "lerna": "^2.2.0",
-    "solcpiler": "https://github.com/perissology/solcpiler.git#6393e66",
+    "solcpiler": "1.0.0-beta.5",
     "solium": "^1.0.9",
-    "web3": "1.0.0-beta.31"
+    "web3": "1.0.0-beta.34"
   }
 }

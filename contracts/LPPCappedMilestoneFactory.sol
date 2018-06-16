@@ -3,11 +3,11 @@ pragma solidity ^0.4.18;
 import "./LPPCappedMilestone.sol";
 import "@aragon/os/contracts/factory/AppProxyFactory.sol";
 import "@aragon/os/contracts/kernel/Kernel.sol";
+import "@aragon/os/contracts/common/VaultRecoverable.sol";
 import "giveth-liquidpledging/contracts/LiquidPledging.sol";
 import "giveth-liquidpledging/contracts/LPConstants.sol";
-import "giveth-common-contracts/contracts/Escapable.sol";
 
-contract LPPCappedMilestoneFactory is LPConstants, Escapable, AppProxyFactory {
+contract LPPCappedMilestoneFactory is LPConstants, VaultRecoverable, AppProxyFactory {
     Kernel public kernel;
 
     bytes32 constant public MILESTONE_APP_ID = keccak256("lpp-capped-milestone");
@@ -16,8 +16,7 @@ contract LPPCappedMilestoneFactory is LPConstants, Escapable, AppProxyFactory {
 
     event DeployMilestone(address milestone);
 
-    function LPPCappedMilestoneFactory(address _kernel, address _escapeHatchCaller, address _escapeHatchDestination)
-        Escapable(_escapeHatchCaller, _escapeHatchDestination) public
+    function LPPCappedMilestoneFactory(address _kernel) public
     {
         // note: this contract will need CREATE_PERMISSIONS_ROLE on the ACL
         // and the PLUGIN_MANAGER_ROLE on liquidPledging,
@@ -32,8 +31,6 @@ contract LPPCappedMilestoneFactory is LPConstants, Escapable, AppProxyFactory {
         string _url,
         uint64 _parentProject,
         address _reviewer,
-        address _escapeHatchCaller,
-        address _escapeHatchDestination,
         address _recipient,
         address _campaignReviewer,
         address _milestoneManager,
@@ -44,7 +41,6 @@ contract LPPCappedMilestoneFactory is LPConstants, Escapable, AppProxyFactory {
     {
         var (liquidPledging, milestone, idProject) = _deployMilestone(_name, _url, _parentProject);
         milestone.initialize(
-            _escapeHatchDestination,
             _reviewer,
             _campaignReviewer,
             _recipient,
@@ -81,5 +77,9 @@ contract LPPCappedMilestoneFactory is LPConstants, Escapable, AppProxyFactory {
             0,
             ILiquidPledgingPlugin(milestone)
         );  
+    }
+
+    function getRecoveryVault() public view returns (address) {
+        return kernel.getRecoveryVault();
     }
 }

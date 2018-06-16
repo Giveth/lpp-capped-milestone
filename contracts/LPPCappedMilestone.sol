@@ -20,8 +20,7 @@ pragma solidity 0.4.18;
 */
 
 import "giveth-liquidpledging/contracts/LiquidPledging.sol";
-import "giveth-liquidpledging/contracts/EscapableApp.sol";
-import "giveth-common-contracts/contracts/ERC20.sol";
+import "@aragon/os/contracts/apps/AragonApp.sol";
 import "@aragon/os/contracts/kernel/IKernel.sol";
 import "giveth-bridge/contracts/IForeignGivethBridge.sol";
 
@@ -38,7 +37,7 @@ import "giveth-bridge/contracts/IForeignGivethBridge.sol";
 ///  2. The reviewer can cancel the milestone. 
 ///  3. The recipient role will receive the pledge's owned by this milestone. 
 
-contract LPPCappedMilestone is EscapableApp {
+contract LPPCappedMilestone is AragonApp {
     uint constant TO_OWNER = 256;
     uint constant TO_INTENDEDPROJECT = 511;
     // keccack256(Kernel.APP_ADDR_NAMESPACE(), keccack256("ForeignGivethBridge"))
@@ -110,19 +109,10 @@ contract LPPCappedMilestone is EscapableApp {
         _; 
     }
     
-
-    function LPPCappedMilestone(address _escapeHatchDestination) EscapableApp(_escapeHatchDestination) public {}
-
     //== constructor
-
-    function initialize(address _escapeHatchDestination) onlyInit public {
-        require(false); // overload the EscapableApp
-        _escapeHatchDestination;
-    }
 
     // @notice we pass in the idProject here because it was throwing stack too deep error
     function initialize(
-        address _escapeHatchDestination,
         address _reviewer,
         address _campaignReviewer,
         address _recipient,
@@ -141,8 +131,7 @@ contract LPPCappedMilestone is EscapableApp {
         require(_milestoneManager != 0);
         require(_liquidPledging != 0);
         require(_acceptedToken != 0);
-
-        super.initialize(_escapeHatchDestination);
+        initialized();
 
         idProject = _idProject;
         liquidPledging = LiquidPledging(_liquidPledging);
@@ -379,6 +368,16 @@ contract LPPCappedMilestone is EscapableApp {
     // @notice Allows the recipient to collect ether or tokens from this milestones
     function collect() onlyRecipient checkReviewTimeout external {
         _collect();
+    }
+
+    /**
+    * @dev By default, AragonApp will allow anyone to call transferToVault
+    *      We need to blacklist the `acceptedToken`
+    * @param token Token address that would be recovered
+    * @return bool whether the app allows the recovery
+    */
+    function allowRecoverability(address token) public view returns (bool) {
+        return token != acceptedToken;
     }
 
     function _collect() internal {
