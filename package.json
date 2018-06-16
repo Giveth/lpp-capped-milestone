@@ -1,6 +1,6 @@
 {
   "name": "lpp-capped-milestone",
-  "version": "1.0.0-beta.2",
+  "version": "1.0.0-beta.3",
   "description": "Contract for generating capped milestone with reviewer for liquidpledging.",
   "main": "index.js",
   "directories": {
