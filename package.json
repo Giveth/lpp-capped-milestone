@@ -32,18 +32,16 @@
   "homepage": "https://github.com/Giveth/lpp-capped-milestones#readme",
   "dependencies": {
     "@aragon/os": "3.1.9",
-    "chai": "^4.1.2",
     "giveth-bridge": "1.0.0-beta.1",
-    "giveth-liquidpledging": "1.0.0-beta.2",
-    "minimetoken": "^0.2.0"
+    "giveth-liquidpledging": "1.0.0-beta.2"
   },
   "devDependencies": {
-    "babel-cli": "^6.26.0",
-    "babel-preset-env": "^1.6.0",
+    "chai": "^4.1.2",
     "eslint": "^4.3.0",
     "eth-contract-class": "0.0.10",
     "ganache-cli": "^6.1.2",
     "lerna": "^2.2.0",
+    "minimetoken": "^0.2.0",
     "solcpiler": "1.0.0-beta.5",
     "solium": "^1.0.9",
     "web3": "1.0.0-beta.34"

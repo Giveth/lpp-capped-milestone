@@ -7,6 +7,7 @@ import "@aragon/os/contracts/common/VaultRecoverable.sol";
 import "giveth-liquidpledging/contracts/LiquidPledging.sol";
 import "giveth-liquidpledging/contracts/LPConstants.sol";
 
+
 contract LPPCappedMilestoneFactory is LPConstants, VaultRecoverable, AppProxyFactory {
     Kernel public kernel;
 
@@ -16,8 +17,7 @@ contract LPPCappedMilestoneFactory is LPConstants, VaultRecoverable, AppProxyFac
 
     event DeployMilestone(address milestone);
 
-    function LPPCappedMilestoneFactory(address _kernel) public
-    {
+    function LPPCappedMilestoneFactory(address _kernel) public {
         // note: this contract will need CREATE_PERMISSIONS_ROLE on the ACL
         // and the PLUGIN_MANAGER_ROLE on liquidPledging,
         // the MILESTONE_APP and LP_APP_INSTANCE need to be registered with the kernel
@@ -55,6 +55,10 @@ contract LPPCappedMilestoneFactory is LPConstants, VaultRecoverable, AppProxyFac
         DeployMilestone(address(milestone));
     }
 
+    function getRecoveryVault() public view returns (address) {
+        return kernel.getRecoveryVault();
+    }
+
     function _deployMilestone(
         string _name, 
         string _url, 
@@ -77,9 +81,5 @@ contract LPPCappedMilestoneFactory is LPConstants, VaultRecoverable, AppProxyFac
             0,
             ILiquidPledgingPlugin(milestone)
         );  
-    }
-
-    function getRecoveryVault() public view returns (address) {
-        return kernel.getRecoveryVault();
     }
 }

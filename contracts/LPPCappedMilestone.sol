@@ -220,7 +220,6 @@ contract LPPCappedMilestone is AragonApp {
         MilestoneReviewerChanged(liquidPledging, idProject, reviewer);         
     }  
 
-
     // @notice The campaign reviewer can request changing a campaign reviewer.
     function requestChangeCampaignReviewer(address _newCampaignReviewer) onlyCampaignReviewer external {
         newCampaignReviewer = _newCampaignReviewer;
@@ -240,8 +239,6 @@ contract LPPCappedMilestone is AragonApp {
 
         MilestoneCampaignReviewerChanged(liquidPledging, idProject, reviewer);         
     }  
-
-
 
     // @notice The recipient can request changing recipient.
     // @dev There's no point in adding a rejectNewRecipient because as long as
