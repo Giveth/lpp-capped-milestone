@@ -1,6 +1,6 @@
 {
   "name": "lpp-capped-milestone",
-  "version": "1.0.0-beta.3",
+  "version": "1.0.0-beta.4",
   "description": "Contract for generating capped milestone with reviewer for liquidpledging.",
   "main": "index.js",
   "directories": {
@@ -33,7 +33,7 @@
   "dependencies": {
     "@aragon/os": "3.1.9",
     "giveth-bridge": "1.0.0-beta.1",
-    "giveth-liquidpledging": "1.0.0-beta.4"
+    "giveth-liquidpledging": "1.0.0-beta.6"
   },
   "devDependencies": {
     "chai": "^4.1.2",
@@ -42,7 +42,7 @@
     "ganache-cli": "^6.1.2",
     "lerna": "^2.2.0",
     "minimetoken": "^0.2.0",
-    "solcpiler": "1.0.0-beta.5",
+    "solcpiler": "1.0.0-beta.7",
     "solium": "^1.0.9",
     "web3": "1.0.0-beta.34"
   }
