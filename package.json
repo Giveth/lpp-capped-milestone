@@ -1,6 +1,6 @@
 {
   "name": "lpp-capped-milestone",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Contract for generating capped milestone with reviewer for liquidpledging.",
   "main": "index.js",
   "directories": {
@@ -32,7 +32,7 @@
   "homepage": "https://github.com/Giveth/lpp-capped-milestones#readme",
   "dependencies": {
     "@aragon/os": "3.1.9",
-    "giveth-bridge": "1.0.0",
+    "giveth-bridge": "1.0.4",
     "giveth-liquidpledging": "1.0.0"
   },
   "devDependencies": {
