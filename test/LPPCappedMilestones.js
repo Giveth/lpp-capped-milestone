@@ -434,7 +434,7 @@ describe('LPPCappedMilestone test', function() {
     assert.equal(mReceived, 100);
   });
 
-  it('Only recipient should be able to withdraw', async () => {
+  it('Only recipient or milestoneManager can withdraw', async () => {
     received = await milestone.received();
 
     const pledges = [{ amount: 50, id: 2 }];
@@ -449,9 +449,6 @@ describe('LPPCappedMilestone test', function() {
     });
 
     // check roles other than recipient cannot withdraw
-    await assertFail(
-      milestone.mWithdraw(encodedPledges, { from: milestoneManager1, gas: 4000000 }),
-    );
     await assertFail(milestone.mWithdraw(encodedPledges, { from: giver1, gas: 4000000 }));
     await assertFail(milestone.mWithdraw(encodedPledges, { from: reviewer1, gas: 4000000 }));
 
@@ -463,14 +460,17 @@ describe('LPPCappedMilestone test', function() {
     assert.equal(bridgeEvents.length, 1);
     assert.equal(bridgeEvents[0].transactionHash, res.transactionHash);
 
-    // recipient can withdraw a single pledge
-    res = await milestone.withdraw(2, 20, { from: recipient1, $extraGas: 100000 });
+    // milestoneManager can withdraw a single pledge
+    res = await milestone.withdraw(2, 10, { from: milestoneManager1, $extraGas: 100000 });
     fromBlock = await web3.eth.getBlockNumber();
+    // recipient can withdraw a single pledge
+    const res2 = await milestone.withdraw(2, 10, { from: recipient1, $extraGas: 100000 });
     bridgeEvents = await bridge.$contract.getPastEvents('Withdraw', {fromBlock});
 
     // ensure the Withdraw event was emitted from bridge
-    assert.equal(bridgeEvents.length, 1);
+    assert.equal(bridgeEvents.length, 2);
     assert.equal(bridgeEvents[0].transactionHash, res.transactionHash);
+    assert.equal(bridgeEvents[1].transactionHash, res2.transactionHash);
   });
 
   it('Only reviewer can request changing reviewer', async () => {
@@ -606,7 +606,7 @@ describe('LPPCappedMilestone test', function() {
     assert.equal(receivedBeforeDelegation, receivedAfterDelegation);
   });
 
-  it('Nobody else but Reviewer and Milestone Manager can cancel milestone', async () => {
+  it('Nobody else but Reviewer and Milestone Manager can cancel milestone', async function() {
     await assertFail(milestone.cancelMilestone({ from: recipient2, gas: 4000000 }));
     await assertFail(milestone.cancelMilestone({ from: giver1, gas: 4000000 }));
 

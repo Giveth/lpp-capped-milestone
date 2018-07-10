@@ -91,15 +91,10 @@ contract LPPCappedMilestone is AragonApp {
         _;
     }
 
-    modifier onlyRecipient() {
-        require(msg.sender == recipient);
+    modifier onlyManagerOrRecipient() {
+        require(msg.sender == milestoneManager || msg.sender == recipient);
         _;
     }   
-
-    modifier onlyManager() {
-        require(msg.sender == milestoneManager);
-        _;
-    }           
 
     modifier checkReviewTimeout() { 
         if (!completed && reviewTimeout > 0 && now > reviewTimeout) {
@@ -158,8 +153,7 @@ contract LPPCappedMilestone is AragonApp {
     // @notice Milestone manager can request to mark a milestone as completed
     // When he does, the timeout is initiated. So if the reviewer doesn't
     // handle the request in time, the recipient can withdraw the funds
-    function requestMarkAsComplete() external {
-        require(msg.sender == milestoneManager || msg.sender == recipient);
+    function requestMarkAsComplete() onlyManagerOrRecipient external {
         require(!isCanceled());
         require(!requestComplete);
 
@@ -348,23 +342,27 @@ contract LPPCappedMilestone is AragonApp {
         }
     }
 
-    // @notice Allows the recipient to withdraw money from the vault to this milestone.
+    // @notice Allows the recipient or milestoneManager to initiate withdraw from
+    // the vault to this milestone. If the vault is autoPay, this will disburse the
+    // payment to the recipient
     // Checks if reviewTimeout has passed, if so, sets completed to yes
-    function mWithdraw(uint[] pledgesAmounts) onlyRecipient checkReviewTimeout external {        
+    function mWithdraw(uint[] pledgesAmounts) onlyManagerOrRecipient checkReviewTimeout external {
         liquidPledging.mWithdraw(pledgesAmounts);
-        _collect();        
+        _disburse();
     }
 
-    // @notice Allows the recipient to withdraw money of a single pledge, from the vault to this milestone.
+    // @notice Allows the recipient or milestoneManager to initiate withdraw of a single pledge, from
+    // the vault to this milestone. If the vault is autoPay, this will disburse the payment to the
+    // recipient
     // Checks if reviewTimeout has passed, if so, sets completed to yes
-    function withdraw(uint64 idPledge, uint amount) onlyRecipient checkReviewTimeout external {        
+    function withdraw(uint64 idPledge, uint amount) onlyManagerOrRecipient checkReviewTimeout external {
         liquidPledging.withdraw(idPledge, amount);
-        _collect();
+        _disburse();
     }
 
-    // @notice Allows the recipient to collect ether or tokens from this milestones
-    function collect() onlyRecipient checkReviewTimeout external {
-        _collect();
+    // @notice Allows the recipient or milestoneManager to disburse funds to the recipient
+    function disburse() onlyManagerOrRecipient checkReviewTimeout external {
+        _disburse();
     }
 
     /**
@@ -377,7 +375,7 @@ contract LPPCappedMilestone is AragonApp {
         return token != acceptedToken;
     }
 
-    function _collect() internal {
+    function _disburse() internal {
         IKernel kernel = liquidPledging.kernel();
         IForeignGivethBridge bridge = IForeignGivethBridge(kernel.getApp(FOREIGN_BRIDGE_INSTANCE));
 
