@@ -11,7 +11,6 @@ const {
   test,
   LiquidPledgingState,
 } = require('giveth-liquidpledging');
-const { ForeignGivethBridge } = require('giveth-bridge');
 const { MiniMeToken, MiniMeTokenFactory, MiniMeTokenState } = require('minimetoken');
 const Web3 = require('web3');
 const { StandardTokenTest, assertFail, deployLP } = test;
@@ -41,7 +40,6 @@ describe('LPPCappedMilestone test', function() {
   let liquidPledgingState;
   let kernel;
   let vault;
-  let bridge;
   let lpManager;
   let giver1;
   let delegate1;
@@ -114,27 +112,6 @@ describe('LPPCappedMilestone test', function() {
     giver1Token = await MiniMeToken.new(web3, tokenFactory.$address, 0, 0, 'Giver Token', 18, 'GT', true);
     await giver1Token.generateTokens(giver1, web3.utils.toWei('1000'));
     await giver1Token.approve(liquidPledging.$address, '0xFFFFFFFFFFFFFFFF', { from: giver1 });
-
-    bridge = await ForeignGivethBridge.new(
-      web3,
-      accounts[0],
-      accounts[0],
-      tokenFactory.$address,
-      liquidPledging.$address,
-      accounts[0],
-      [0],
-      [giver1Token.$address],
-      { from: accounts[0], $extraGas: 100000 },
-    );
-
-    await kernel.setApp(
-      await kernel.APP_ADDR_NAMESPACE(),
-      utils.keccak256("ForeignGivethBridge"),
-      bridge.$address,
-      { $extraGas: 200000 },
-    );
-
-    await giver1Token.changeController(bridge.$address);
   });
 
   after(done => {
@@ -455,22 +432,13 @@ describe('LPPCappedMilestone test', function() {
     // recipient can withdraw
     res = await milestone.mWithdraw(encodedPledges, { from: recipient1, $extraGas: 100000 });
     let fromBlock = await web3.eth.getBlockNumber();
-    let bridgeEvents = await bridge.$contract.getPastEvents('Withdraw', {fromBlock});
-    // ensure the Withdraw event was emitted from bridge
-    assert.equal(bridgeEvents.length, 1);
-    assert.equal(bridgeEvents[0].transactionHash, res.transactionHash);
 
     // milestoneManager can withdraw a single pledge
     res = await milestone.withdraw(2, 10, { from: milestoneManager1, $extraGas: 100000 });
     fromBlock = await web3.eth.getBlockNumber();
     // recipient can withdraw a single pledge
     const res2 = await milestone.withdraw(2, 10, { from: recipient1, $extraGas: 100000 });
-    bridgeEvents = await bridge.$contract.getPastEvents('Withdraw', {fromBlock});
 
-    // ensure the Withdraw event was emitted from bridge
-    assert.equal(bridgeEvents.length, 2);
-    assert.equal(bridgeEvents[0].transactionHash, res.transactionHash);
-    assert.equal(bridgeEvents[1].transactionHash, res2.transactionHash);
   });
 
   it('Only reviewer can request changing reviewer', async () => {

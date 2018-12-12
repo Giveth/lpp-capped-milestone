@@ -22,7 +22,6 @@ pragma solidity 0.4.18;
 import "giveth-liquidpledging/contracts/LiquidPledging.sol";
 import "@aragon/os/contracts/apps/AragonApp.sol";
 import "@aragon/os/contracts/kernel/IKernel.sol";
-import "giveth-bridge/contracts/IForeignGivethBridge.sol";
 
 
 /// @title LPPCappedMilestone
@@ -40,8 +39,6 @@ import "giveth-bridge/contracts/IForeignGivethBridge.sol";
 contract LPPCappedMilestone is AragonApp {
     uint constant TO_OWNER = 256;
     uint constant TO_INTENDEDPROJECT = 511;
-    // keccack256(Kernel.APP_ADDR_NAMESPACE(), keccack256("ForeignGivethBridge"))
-    bytes32 constant public FOREIGN_BRIDGE_INSTANCE = 0xa46b3f7f301ac0173ef5564df485fccae3b60583ddb12c767fea607ff6971d0b;
 
     LiquidPledging public liquidPledging;
     uint64 public idProject;
@@ -375,15 +372,25 @@ contract LPPCappedMilestone is AragonApp {
         return token != acceptedToken;
     }
 
-    function _disburse() internal {
-        IKernel kernel = liquidPledging.kernel();
-        IForeignGivethBridge bridge = IForeignGivethBridge(kernel.getApp(FOREIGN_BRIDGE_INSTANCE));
 
-        ERC20 milestoneToken = ERC20(acceptedToken);
-        uint amount = milestoneToken.balanceOf(this);
+    /**
+    * @notice Pays out the balance of this milestone. Checks for native or ERC20 token
+    */
+    function _disburse() internal {
+        uint amount;
+
+        // check for ether or token
+        if (acceptedToken == address(0x0)) {
+            amount = this.balance;
+            recipient.send(amount);
+        } else {
+            ERC20 milestoneToken = ERC20(acceptedToken);
+
+            amount = milestoneToken.balanceOf(this);
+            milestoneToken.transfer(recipient, amount);
+        }
 
         if (amount > 0) {
-            bridge.withdraw(recipient, acceptedToken, amount);
             PaymentCollected(liquidPledging, idProject);            
         }
     }
