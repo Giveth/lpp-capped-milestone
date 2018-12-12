@@ -32,7 +32,6 @@
   "homepage": "https://github.com/Giveth/lpp-capped-milestones#readme",
   "dependencies": {
     "@aragon/os": "3.1.9",
-    "giveth-bridge": "1.0.4",
     "giveth-liquidpledging": "1.0.0"
   },
   "devDependencies": {
