@@ -75,7 +75,7 @@ contract LPPCappedMilestone is AragonApp {
     event MilestoneChangeRecipientRequested(address indexed liquidPledging, uint64 indexed idProject, address recipient);
     event MilestoneRecipientChanged(address indexed liquidPledging, uint64 indexed idProject, address recipient);
 
-    event PaymentCollected(address indexed liquidPledging, uint64 indexed idProject);
+    event PaymentCollected(address indexed liquidPledging, uint64 indexed idProject, uint indexed amount);
 
 
     modifier onlyReviewer() {
@@ -380,18 +380,18 @@ contract LPPCappedMilestone is AragonApp {
         uint amount;
 
         // check for ether or token
-        if (acceptedToken == address(0x0)) {
+        if (acceptedToken == ETH) {
             amount = this.balance;
-            recipient.send(amount);
+            require(recipient.send(amount));
         } else {
             ERC20 milestoneToken = ERC20(acceptedToken);
 
             amount = milestoneToken.balanceOf(this);
-            milestoneToken.transfer(recipient, amount);
+            require(milestoneToken.transfer(recipient, amount));
         }
 
         if (amount > 0) {
-            PaymentCollected(liquidPledging, idProject);            
+            PaymentCollected(liquidPledging, idProject, amount);            
         }
     }
 }
