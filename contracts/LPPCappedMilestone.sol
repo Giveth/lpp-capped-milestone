@@ -122,7 +122,6 @@ contract LPPCappedMilestone is AragonApp {
         require(_recipient != 0);
         require(_milestoneManager != 0);
         require(_liquidPledging != 0);
-        require(_acceptedToken != 0);
         initialized();
 
         idProject = _idProject;

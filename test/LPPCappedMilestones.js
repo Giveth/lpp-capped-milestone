@@ -629,4 +629,60 @@ describe('LPPCappedMilestone test', function() {
     assert.equal(await milestone.allowRecoverability(0x0), true);
     assert.equal(await milestone.allowRecoverability(giver1Token.$address), false);
   });
+
+  it('Should initiate a milestone that accepts ETH as token', async function() {
+    await factory.newMilestone(
+      'ETH Milestone',
+      'URL3',
+      0,
+      reviewer1,
+      recipient1,
+      campaignReviewer1,
+      milestoneManager1,
+      maxAmount,
+      0x0,
+      reviewTimeoutSeconds,
+    );    
+
+    const lpState = await liquidPledgingState.getState();
+    lpManager = lpState.admins[5];
+
+    milestone = new LPPCappedMilestone(web3, lpManager.plugin);
+    const acceptedToken = await milestone.acceptedToken();
+    assert.equal(acceptedToken, 0);
+  })
+
+  it('ETH Milestone should accept donation in ETH', async () => {
+    const donationAmount = 5;
+    await liquidPledging.addGiver('Giver1', 'URL', 0, 0x0, { from: giver1 });
+    idGiver1 = 2;
+    await liquidPledging.donate(idGiver1, 5, {
+      value: donationAmount, 
+      from: giver1,
+      $extraGas: 100000,
+    });
+
+    // check the donation
+    const nPledges = await liquidPledging.numberOfPledges();
+    const donation = await liquidPledging.getPledge(nPledges);
+    assert.equal(donation.amount, donationAmount);
+    assert.equal(donation.token, 0x0);
+
+    // check balance of vault
+    const vaultBalance = await web3.eth.getBalance(vault.$address);
+    assert.equal(vaultBalance, donationAmount);
+
+    // check milestone balance - which should still be 0 as donated eth is send to the vault
+    const lpState = await liquidPledgingState.getState();
+    lpManager = lpState.admins[5];
+
+    milestone = new LPPCappedMilestone(web3, lpManager.plugin);
+    const balance = await web3.eth.getBalance(lpManager.plugin);
+    assert.equal(balance, 0);
+
+    // check received count, should be set to donation amount
+    const received = await milestone.received();
+    assert.equal(received, donationAmount);    
+  });
+
 });

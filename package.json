@@ -7,7 +7,7 @@
     "lib": "lib"
   },
   "scripts": {
-    "test": "npm run compile && mocha index.js --harmony",
+    "test": "npm run compile && mocha ./test/LPPCappedMilestones.js --harmony",
     "compile": "solcpiler --solc-version v0.4.18+commit.9cf6e910",
     "lint": "solium --dir contracts",
     "clean": "rm -rf build/",
@@ -32,7 +32,7 @@
   "homepage": "https://github.com/Giveth/lpp-capped-milestones#readme",
   "dependencies": {
     "@aragon/os": "3.1.9",
-    "giveth-liquidpledging": "1.0.0"
+    "giveth-liquidpledging": "github:Giveth/liquidpledging#native-currency-support"
   },
   "devDependencies": {
     "chai": "^4.1.2",
