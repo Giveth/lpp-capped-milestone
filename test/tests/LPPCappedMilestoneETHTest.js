@@ -2,7 +2,7 @@
 /* eslint-disable no-await-in-loop */
 const Ganache = require('ganache-cli');
 const { assert } = require('chai');
-const { LPPCappedMilestone, LPPCappedMilestoneFactory } = require('../index');
+const { LPPCappedMilestone, LPPCappedMilestoneFactory } = require('../../index');
 const {
   Kernel,
   ACL,
@@ -11,7 +11,6 @@ const {
   test,
   LiquidPledgingState,
 } = require('giveth-liquidpledging');
-const { MiniMeToken, MiniMeTokenFactory, MiniMeTokenState } = require('minimetoken');
 const Web3 = require('web3');
 const { StandardTokenTest, assertFail, deployLP } = test;
 
@@ -30,7 +29,7 @@ const printBalances = async liquidPledging => {
   }
 };
 
-describe('LPPCappedMilestone test', function() {
+describe('LPPCappedMilestone ETHER test', function() {
   this.timeout(0);
 
   let testrpc;
@@ -58,6 +57,7 @@ describe('LPPCappedMilestone test', function() {
   let newReviewer;
   let newRecipient;
   let completed;
+  const ETH = 0x0;
 
   before(async () => {
     testrpc = Ganache.server({
@@ -105,13 +105,6 @@ describe('LPPCappedMilestone test', function() {
     );
 
     await vault.setAutopay(true, { from: accounts[0], $extraGas: 100000 });
-
-    const tokenFactory = await MiniMeTokenFactory.new(web3, { gas: 3000000 });
-
-    // generate token for Giver
-    giver1Token = await MiniMeToken.new(web3, tokenFactory.$address, 0, 0, 'Giver Token', 18, 'GT', true);
-    await giver1Token.generateTokens(giver1, web3.utils.toWei('1000'));
-    await giver1Token.approve(liquidPledging.$address, '0xFFFFFFFFFFFFFFFF', { from: giver1 });
   });
 
   after(done => {
@@ -157,7 +150,7 @@ describe('LPPCappedMilestone test', function() {
       campaignReviewer1,
       milestoneManager1,
       maxAmount,
-      giver1Token.$address,
+      ETH,
       reviewTimeoutSeconds,
     );
 
@@ -181,6 +174,7 @@ describe('LPPCappedMilestone test', function() {
     const mRecipient = await milestone.recipient();
     const mMaxAmount = await milestone.maxAmount();
     const mAccepted = await milestone.completed();
+    const acceptedToken = await milestone.acceptedToken();
 
     assert.isAbove(Number(await milestone.getInitializationBlock()), 0);
 
@@ -190,21 +184,39 @@ describe('LPPCappedMilestone test', function() {
     assert.equal(mRecipient, recipient1);
     assert.equal(mMaxAmount, maxAmount);
     assert.equal(mAccepted, false);
+    assert.equal(acceptedToken, ETH);        
   });
 
   it('Should accept a donation', async () => {
     const donationAmount = 95;
     await liquidPledging.addGiver('Giver1', 'URL', 0, 0x0, { from: giver1 });
     idGiver1 = 2;
-    await liquidPledging.donate(idGiver1, idReceiver, giver1Token.$address, donationAmount, {
+
+    await liquidPledging.donate(idGiver1, idReceiver, {
+      value: donationAmount,
       from: giver1,
       $extraGas: 100000,
     });
 
-    const donation = await liquidPledging.getPledge(2);
+    // check the donation
+    const nPledges = await liquidPledging.numberOfPledges();
+    const donation = await liquidPledging.getPledge(nPledges);
     assert.equal(donation.amount, donationAmount);
-    assert.equal(donation.token, giver1Token.$address);
-    assert.equal(donation.owner, idReceiver);
+    assert.equal(donation.token, 0x0);
+    assert.equal(donation.owner, idReceiver);    
+
+    // check balance of vault
+    const vaultBalance = await web3.eth.getBalance(vault.$address);
+    assert.equal(vaultBalance, donationAmount);
+
+    // check milestone balance - which should still be 0 as donated eth is send to the vault
+    const balance = await web3.eth.getBalance(milestone.$address);
+    assert.equal(balance, 0);
+
+    // check received count, should be set to donation amount
+    const received = await milestone.received();
+    assert.equal(received, donationAmount); 
+
   });
 
   it('Should only accept funds on delegation commit', async () => {
@@ -220,7 +232,8 @@ describe('LPPCappedMilestone test', function() {
     }); // admin 3
 
     // giver1 donates to delegate1
-    await liquidPledging.donate(idGiver1, idDelegate1, giver1Token.$address, donationAmount, {
+    await liquidPledging.donate(idGiver1, idDelegate1, {
+      value: donationAmount,
       from: giver1,
       gas: 4000000,
     }); // pledge 3
@@ -252,7 +265,7 @@ describe('LPPCappedMilestone test', function() {
     // a new pledge is created with the owner the project
     const delegatedDonation = await liquidPledging.getPledge(5);
     assert.equal(delegatedDonation.amount, donationAmount);
-    assert.equal(delegatedDonation.token, giver1Token.$address);
+    assert.equal(delegatedDonation.token, ETH);
     assert.equal(delegatedDonation.owner, 1);
   });
 
@@ -261,7 +274,8 @@ describe('LPPCappedMilestone test', function() {
     const mReceivedBefore = await milestone.received();
 
     const donationAmount = 100;
-    await liquidPledging.donate(idGiver1, idReceiver, giver1Token.$address, donationAmount, {
+    await liquidPledging.donate(idGiver1, idReceiver, {
+      value: donationAmount,
       from: giver1,
       $extraGas: 100000,
     });
@@ -395,7 +409,8 @@ describe('LPPCappedMilestone test', function() {
     let mReceived = await milestone.received();
     assert.equal(mReceived, 100);
 
-    await liquidPledging.donate(idGiver1, idReceiver, giver1Token.$address, donationAmount, {
+    await liquidPledging.donate(idGiver1, idReceiver, {
+      value: donationAmount,
       from: giver1,
       $extraGas: 100000,
     });
@@ -403,7 +418,7 @@ describe('LPPCappedMilestone test', function() {
     // donor should have his donationAmount back
     const refundedDonation = await liquidPledging.getPledge(1);
     assert.equal(refundedDonation.amount, 100 + donationAmount);
-    assert.equal(refundedDonation.token, giver1Token.$address);
+    assert.equal(refundedDonation.token, ETH);
     assert.equal(refundedDonation.owner, idGiver1);
 
     // check received state of milestone after donation
@@ -546,7 +561,8 @@ describe('LPPCappedMilestone test', function() {
 
     const idDelegate1 = 3;
     const donationAmount = 250;
-    await liquidPledging.donate(idGiver1, idDelegate1, giver1Token.$address, donationAmount, {
+    await liquidPledging.donate(idGiver1, idDelegate1, {
+      value: donationAmount,
       from: giver1,
       gas: 4000000,
     }); // pledge 3
@@ -594,7 +610,7 @@ describe('LPPCappedMilestone test', function() {
       campaignReviewer1,
       milestoneManager1,
       1000,
-      giver1Token.$address,
+      ETH,
       reviewTimeoutSeconds,
     );
 
@@ -620,69 +636,17 @@ describe('LPPCappedMilestone test', function() {
     // donate to milestone
     // donating to a canceled milestone should throw
     await assertFail(
-      liquidPledging.donate(2, 4, giver1Token.$address, 150, { from: giver1, gas: 4000000 })
+      liquidPledging.donate(2, 4, { 
+        value: 150,
+        from: giver1, 
+        gas: 4000000 
+      })
     );
   });
 
   it('Should reject "escapeHatch" attempts for acceptedToken', async function() {
-    await assertFail(milestone.transferToVault(giver1Token.$address, { from: recipient1, gas: 6700000 }));
-    assert.equal(await milestone.allowRecoverability(0x0), true);
-    assert.equal(await milestone.allowRecoverability(giver1Token.$address), false);
+    await assertFail(milestone.transferToVault(ETH, { from: recipient1, gas: 6700000 }));
+    assert.equal(await milestone.allowRecoverability(someRandomToken.$address), true);
+    assert.equal(await milestone.allowRecoverability(ETH), false);
   });
-
-  it('Should initiate a milestone that accepts ETH as token', async function() {
-    await factory.newMilestone(
-      'ETH Milestone',
-      'URL3',
-      0,
-      reviewer1,
-      recipient1,
-      campaignReviewer1,
-      milestoneManager1,
-      maxAmount,
-      0x0,
-      reviewTimeoutSeconds,
-    );    
-
-    const lpState = await liquidPledgingState.getState();
-    lpManager = lpState.admins[5];
-
-    milestone = new LPPCappedMilestone(web3, lpManager.plugin);
-    const acceptedToken = await milestone.acceptedToken();
-    assert.equal(acceptedToken, 0);
-  })
-
-  it('ETH Milestone should accept donation in ETH', async () => {
-    const donationAmount = 5;
-    await liquidPledging.addGiver('Giver1', 'URL', 0, 0x0, { from: giver1 });
-    idGiver1 = 2;
-    await liquidPledging.donate(idGiver1, 5, {
-      value: donationAmount, 
-      from: giver1,
-      $extraGas: 100000,
-    });
-
-    // check the donation
-    const nPledges = await liquidPledging.numberOfPledges();
-    const donation = await liquidPledging.getPledge(nPledges);
-    assert.equal(donation.amount, donationAmount);
-    assert.equal(donation.token, 0x0);
-
-    // check balance of vault
-    const vaultBalance = await web3.eth.getBalance(vault.$address);
-    assert.equal(vaultBalance, donationAmount);
-
-    // check milestone balance - which should still be 0 as donated eth is send to the vault
-    const lpState = await liquidPledgingState.getState();
-    lpManager = lpState.admins[5];
-
-    milestone = new LPPCappedMilestone(web3, lpManager.plugin);
-    const balance = await web3.eth.getBalance(lpManager.plugin);
-    assert.equal(balance, 0);
-
-    // check received count, should be set to donation amount
-    const received = await milestone.received();
-    assert.equal(received, donationAmount);    
-  });
-
 });
