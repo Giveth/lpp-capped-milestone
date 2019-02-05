@@ -314,9 +314,9 @@ contract LPPCappedMilestone is AragonApp, DepositableStorage {
     {
         require(msg.sender == address(liquidPledging));
 
-        (, uint64 fromOwner, , , , , ,) = liquidPledging.getPledge(pledgeFrom);
-        (, uint64 toOwner, , , , , , ) = liquidPledging.getPledge(pledgeTo);
         if (context == TO_OWNER) {
+            (, uint64 fromOwner, , , , , ,) = liquidPledging.getPledge(pledgeFrom);
+            (, uint64 toOwner, , , , , , ) = liquidPledging.getPledge(pledgeTo);
             // If fromOwner != toOwner, the means that a pledge is being committed to
             // milestone. We will accept any amount up to m.maxAmount, and return
             // the rest
