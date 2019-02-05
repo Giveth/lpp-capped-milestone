@@ -1,17 +1,16 @@
 {
   "name": "lpp-capped-milestone",
-  "version": "1.1.0",
+  "version": "2.0.0",
   "description": "Contract for generating capped milestone with reviewer for liquidpledging.",
   "main": "index.js",
   "directories": {
     "lib": "lib"
   },
   "scripts": {
-    "test": "npm run compile && mocha --harmony",
-    "compile": "solcpiler --solc-version v0.4.18+commit.9cf6e910",
+    "test": "embark test",
     "lint": "solium --dir contracts",
-    "clean": "rm -rf build/",
-    "prepublish": "npm run clean && npm run compile"
+    "build": "embark build --contracts",
+    "prepublish": "npm run build"
   },
   "repository": {
     "type": "git",
@@ -31,17 +30,17 @@
   },
   "homepage": "https://github.com/Giveth/lpp-capped-milestones#readme",
   "dependencies": {
-    "@aragon/os": "3.1.9",
-    "giveth-liquidpledging": "github:Giveth/liquidpledging#native-currency-support"
+    "@aragon/os": "4.0.1",
+    "embark": "4.0.0-beta.0",
+    "giveth-liquidpledging": "2.0.0-beta.1"
   },
   "devDependencies": {
+    "embark-solc": "git+https://git@github.com/embark-framework/embark-solc.git#develop",
     "chai": "^4.1.2",
     "eslint": "^4.3.0",
-    "eth-contract-class": "0.0.12",
-    "ganache-cli": "^6.1.2",
+    "eth-contract-class": "^0.0.13-beta.1",
     "lerna": "^2.2.0",
     "minimetoken": "^0.2.0",
-    "solcpiler": "1.0.0-beta.8",
     "solium": "^1.0.9",
     "web3": "1.0.0-beta.34"
   }

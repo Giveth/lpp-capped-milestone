@@ -1,15 +1,9 @@
 const generateClass = require('eth-contract-class').default;
 
-const factoryArtifact = require('./build/LPPCappedMilestoneFactory.json');
-const milestoneArtifact = require('./build/LPPCappedMilestone.json');
+const factoryArtifact = require('./dist/contracts/LPPCappedMilestoneFactory.json');
+const milestoneArtifact = require('./dist/contracts/LPPCappedMilestone.json');
 
 module.exports = {
-  LPPCappedMilestone: generateClass(
-    milestoneArtifact.compilerOutput.abi,
-    milestoneArtifact.compilerOutput.evm.bytecode.object,
-  ),
-  LPPCappedMilestoneFactory: generateClass(
-    factoryArtifact.compilerOutput.abi,
-    factoryArtifact.compilerOutput.evm.bytecode.object,
-  ),
+  LPPCappedMilestone: generateClass(milestoneArtifact.abiDefinition, milestoneArtifact.code),
+  LPPCappedMilestoneFactory: generateClass(factoryArtifact.abiDefinition, factoryArtifact.code),
 };

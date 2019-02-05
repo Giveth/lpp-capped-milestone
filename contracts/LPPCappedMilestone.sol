@@ -1,8 +1,8 @@
-pragma solidity 0.4.18;
+pragma solidity ^0.4.24;
 
 /*
-    Copyright 2017
-    RJ Ewing <perissology@protonmail.com>
+    Copyright 2019
+    RJ Ewing <rj@rjewing.com>
     S van Heummen <satya.vh@gmail.com>
 
     This program is free software: you can redistribute it and/or modify
@@ -21,11 +21,11 @@ pragma solidity 0.4.18;
 
 import "giveth-liquidpledging/contracts/LiquidPledging.sol";
 import "@aragon/os/contracts/apps/AragonApp.sol";
-import "@aragon/os/contracts/kernel/IKernel.sol";
+import "@aragon/os/contracts/common/DepositableStorage.sol";
 
 
 /// @title LPPCappedMilestone
-/// @author RJ Ewing<perissology@protonmail.com>
+/// @author RJ Ewing<rj@rjewing.com>
 /// @notice The LPPCappedMilestone contract is a plugin contract for liquidPledging,
 ///  extending the functionality of a liquidPledging project. This contract
 ///  prevents withdrawals from any pledges this contract is the owner of.
@@ -36,7 +36,7 @@ import "@aragon/os/contracts/kernel/IKernel.sol";
 ///  2. The reviewer can cancel the milestone. 
 ///  3. The recipient role will receive the pledge's owned by this milestone. 
 
-contract LPPCappedMilestone is AragonApp {
+contract LPPCappedMilestone is AragonApp, DepositableStorage {
     uint constant TO_OWNER = 256;
     uint constant TO_INTENDEDPROJECT = 511;
 
@@ -83,6 +83,11 @@ contract LPPCappedMilestone is AragonApp {
         _;
     }
 
+    modifier onlyRecipient() {
+        require(msg.sender == recipient);
+        _;
+    }
+
     modifier onlyCampaignReviewer() {
         require(msg.sender == campaignReviewer);
         _;
@@ -123,11 +128,12 @@ contract LPPCappedMilestone is AragonApp {
         require(_milestoneManager != 0);
         require(_liquidPledging != 0);
         initialized();
+        setDepositable(true);
 
         idProject = _idProject;
         liquidPledging = LiquidPledging(_liquidPledging);
 
-        var ( , addr, , , , , , plugin) = liquidPledging.getPledgeAdmin(idProject);
+        ( , address addr, , , , , , address plugin) = liquidPledging.getPledgeAdmin(idProject);
         require(addr == address(this) && plugin == address(this));
 
         maxAmount = _maxAmount;
@@ -154,7 +160,7 @@ contract LPPCappedMilestone is AragonApp {
         require(!requestComplete);
 
         requestComplete = true;
-        MilestoneCompleteRequested(liquidPledging, idProject);        
+        emit MilestoneCompleteRequested(liquidPledging, idProject);        
         
         // start the review timeout
         reviewTimeout = now + reviewTimeoutSeconds;    
@@ -169,7 +175,7 @@ contract LPPCappedMilestone is AragonApp {
         completed = false;
         requestComplete = false;
         reviewTimeout = 0;
-        MilestoneCompleteRequestRejected(liquidPledging, idProject);
+        emit MilestoneCompleteRequestRejected(liquidPledging, idProject);
     }   
 
     // @notice The reviewer can approve a completion request from the milestone manager
@@ -179,7 +185,7 @@ contract LPPCappedMilestone is AragonApp {
         require(!isCanceled());
 
         completed = true;
-        MilestoneCompleteRequestApproved(liquidPledging, idProject);         
+        emit MilestoneCompleteRequestApproved(liquidPledging, idProject);         
     }
 
     // @notice The reviewer and the milestone manager can cancel a milestone.
@@ -194,7 +200,7 @@ contract LPPCappedMilestone is AragonApp {
     function requestChangeReviewer(address _newReviewer) onlyReviewer external {
         newReviewer = _newReviewer;
 
-        MilestoneChangeReviewerRequested(liquidPledging, idProject, newReviewer);                 
+        emit MilestoneChangeReviewerRequested(liquidPledging, idProject, newReviewer);                 
     }    
 
     // @notice The new reviewer needs to accept the request from the old
@@ -207,14 +213,14 @@ contract LPPCappedMilestone is AragonApp {
         reviewer = newReviewer;
         newReviewer = 0;
 
-        MilestoneReviewerChanged(liquidPledging, idProject, reviewer);         
+        emit MilestoneReviewerChanged(liquidPledging, idProject, reviewer);         
     }  
 
     // @notice The campaign reviewer can request changing a campaign reviewer.
     function requestChangeCampaignReviewer(address _newCampaignReviewer) onlyCampaignReviewer external {
         newCampaignReviewer = _newCampaignReviewer;
 
-        MilestoneChangeCampaignReviewerRequested(liquidPledging, idProject, newReviewer);                 
+        emit MilestoneChangeCampaignReviewerRequested(liquidPledging, idProject, newReviewer);                 
     }    
 
     // @notice The new campaign reviewer needs to accept the request from the old
@@ -227,16 +233,16 @@ contract LPPCappedMilestone is AragonApp {
         campaignReviewer = newCampaignReviewer;
         newCampaignReviewer = 0;
 
-        MilestoneCampaignReviewerChanged(liquidPledging, idProject, reviewer);         
+        emit MilestoneCampaignReviewerChanged(liquidPledging, idProject, reviewer);         
     }  
 
     // @notice The recipient can request changing recipient.
     // @dev There's no point in adding a rejectNewRecipient because as long as
     // the new recipient doesn't accept, the old recipient remains the recipient.
-    function requestChangeRecipient(address _newRecipient) onlyReviewer external {
+    function requestChangeRecipient(address _newRecipient) onlyRecipient external {
         newRecipient = _newRecipient;
 
-        MilestoneChangeRecipientRequested(liquidPledging, idProject, newRecipient);                 
+        emit MilestoneChangeRecipientRequested(liquidPledging, idProject, newRecipient);                 
     }
 
     // @notice The new recipient needs to accept the request from the old
@@ -247,7 +253,7 @@ contract LPPCappedMilestone is AragonApp {
         recipient = newRecipient;
         newRecipient = 0;
 
-        MilestoneRecipientChanged(liquidPledging, idProject, recipient);         
+        emit MilestoneRecipientChanged(liquidPledging, idProject, recipient);         
 
     }     
 
@@ -261,7 +267,7 @@ contract LPPCappedMilestone is AragonApp {
         uint64 context,
         address token,
         uint amount
-    ) external returns (uint maxAllowed)
+    ) external returns (uint)
     {
         require(msg.sender == address(liquidPledging));
         
@@ -270,26 +276,25 @@ contract LPPCappedMilestone is AragonApp {
             return 0;
         }
 
-        var (, , , fromIntendedProject, , , ,) = liquidPledging.getPledge(pledgeFrom);
-        var (, toOwner, , , , , ,toPledgeState) = liquidPledging.getPledge(pledgeTo);
+        if (!completed) {
+            return amount;
+        }
 
         // if m is the intendedProject, make sure m is still accepting funds (not completed or canceled)
         if (context == TO_INTENDEDPROJECT) {
             // don't need to check if canceled b/c lp does this
-            if (completed) {
-                return 0;
-            }
+            return 0;
         // if the pledge is being transferred to m and is in the Pledged state, make
         // sure m is still accepting funds (not completed or canceled)
-        } else if (context == TO_OWNER &&
-            (fromIntendedProject != toOwner &&
-                toPledgeState == LiquidPledgingStorage.PledgeState.Pledged)) {
-            //TODO what if milestone isn't initialized? should we throw?
-            // this can happen if someone adds a project through lp with this contracts address as the plugin
-            // we can require(maxAmount > 0);
-            // don't need to check if canceled b/c lp does this
-            if (completed) {
-                return 0;
+        } else if (context == TO_OWNER) {
+            (, uint64 toOwner, , , , , , LiquidPledgingStorage.PledgeState toPledgeState) = liquidPledging.getPledge(pledgeTo);
+
+            if (toPledgeState == LiquidPledgingStorage.PledgeState.Pledged) {
+                // don't need to check if canceled b/c lp does this
+                (, , , uint64 fromIntendedProject, , , ,) = liquidPledging.getPledge(pledgeFrom);
+                if (fromIntendedProject != toOwner) {
+                    return 0;
+                }
             }
         }
         return amount;
@@ -309,9 +314,8 @@ contract LPPCappedMilestone is AragonApp {
     {
         require(msg.sender == address(liquidPledging));
 
-        var (, fromOwner, , , , , ,) = liquidPledging.getPledge(pledgeFrom);
-        var (, toOwner, , , , , , ) = liquidPledging.getPledge(pledgeTo);
-
+        (, uint64 fromOwner, , , , , ,) = liquidPledging.getPledge(pledgeFrom);
+        (, uint64 toOwner, , , , , , ) = liquidPledging.getPledge(pledgeTo);
         if (context == TO_OWNER) {
             // If fromOwner != toOwner, the means that a pledge is being committed to
             // milestone. We will accept any amount up to m.maxAmount, and return
@@ -371,7 +375,6 @@ contract LPPCappedMilestone is AragonApp {
         return token != acceptedToken;
     }
 
-
     /**
     * @notice Pays out the balance of this milestone. Checks for native or ERC20 token
     */
@@ -380,8 +383,8 @@ contract LPPCappedMilestone is AragonApp {
 
         // check for ether or token
         if (acceptedToken == ETH) {
-            amount = this.balance;
-            require(recipient.send(amount));
+            amount = address(this).balance;
+            recipient.transfer(amount);
         } else {
             ERC20 milestoneToken = ERC20(acceptedToken);
 
@@ -390,7 +393,7 @@ contract LPPCappedMilestone is AragonApp {
         }
 
         if (amount > 0) {
-            PaymentCollected(liquidPledging, idProject, amount);            
+            emit PaymentCollected(liquidPledging, idProject, amount);            
         }
     }
 }
