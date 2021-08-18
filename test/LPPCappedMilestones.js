@@ -10,8 +10,8 @@ const {
   LPFactory,
   test,
   LiquidPledgingState,
-} = require('giveth-liquidpledging');
-const { ForeignGivethBridge } = require('giveth-bridge');
+} = require('@giveth/liquidpledging-contract');
+const { ForeignGivethBridge } = require('@giveth/bridge-contract-class');
 const { MiniMeToken, MiniMeTokenFactory, MiniMeTokenState } = require('minimetoken');
 const Web3 = require('web3');
 const { StandardTokenTest, assertFail, deployLP } = test;
@@ -380,7 +380,7 @@ describe('LPPCappedMilestone test', function() {
 
   it('Recipient can also request a milestone as complete', async () => {
     // mark as complete
-    await milestone.requestMarkAsComplete({ from: recipient1, gas: 4000000 }); 
+    await milestone.requestMarkAsComplete({ from: recipient1, gas: 4000000 });
 
     // check that state of milestone changed
     requestComplete = await milestone.requestComplete();
