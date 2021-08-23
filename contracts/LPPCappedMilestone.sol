@@ -19,10 +19,10 @@ pragma solidity 0.4.18;
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-import "giveth-liquidpledging/contracts/LiquidPledging.sol";
+import "@giveth/liquidpledging-contract/contracts/LiquidPledging.sol";
 import "@aragon/os/contracts/apps/AragonApp.sol";
 import "@aragon/os/contracts/kernel/IKernel.sol";
-import "giveth-bridge/contracts/IForeignGivethBridge.sol";
+import "@giveth/bridge-contract/contracts/IForeignGivethBridge.sol";
 
 
 /// @title LPPCappedMilestone
@@ -30,12 +30,12 @@ import "giveth-bridge/contracts/IForeignGivethBridge.sol";
 /// @notice The LPPCappedMilestone contract is a plugin contract for liquidPledging,
 ///  extending the functionality of a liquidPledging project. This contract
 ///  prevents withdrawals from any pledges this contract is the owner of.
-///  This contract has 4 roles. The admin, a reviewer, and a recipient role. 
+///  This contract has 4 roles. The admin, a reviewer, and a recipient role.
 ///
 ///  1. The admin can cancel the milestone, update the conditions the milestone accepts transfers
-///  and send a tx as the milestone. 
-///  2. The reviewer can cancel the milestone. 
-///  3. The recipient role will receive the pledge's owned by this milestone. 
+///  and send a tx as the milestone.
+///  2. The reviewer can cancel the milestone.
+///  3. The recipient role will receive the pledge's owned by this milestone.
 
 contract LPPCappedMilestone is AragonApp {
     uint constant TO_OWNER = 256;
@@ -47,7 +47,7 @@ contract LPPCappedMilestone is AragonApp {
     uint64 public idProject;
 
     address public reviewer;
-    address public newReviewer;    
+    address public newReviewer;
     address public recipient;
     address public newRecipient;
     address public campaignReviewer;
@@ -94,16 +94,16 @@ contract LPPCappedMilestone is AragonApp {
     modifier onlyManagerOrRecipient() {
         require(msg.sender == milestoneManager || msg.sender == recipient);
         _;
-    }   
+    }
 
-    modifier checkReviewTimeout() { 
+    modifier checkReviewTimeout() {
         if (!completed && reviewTimeout > 0 && now > reviewTimeout) {
             completed = true;
         }
         require(completed);
-        _; 
+        _;
     }
-    
+
     //== constructor
 
     // @notice we pass in the idProject here because it was throwing stack too deep error
@@ -120,7 +120,7 @@ contract LPPCappedMilestone is AragonApp {
         uint64 _idProject
     ) onlyInit external
     {
-        require(_reviewer != 0);        
+        require(_reviewer != 0);
         require(_campaignReviewer != 0);
         require(_recipient != 0);
         require(_milestoneManager != 0);
@@ -136,11 +136,11 @@ contract LPPCappedMilestone is AragonApp {
 
         maxAmount = _maxAmount;
         acceptedToken = _acceptedToken;
-        reviewer = _reviewer;        
+        reviewer = _reviewer;
         recipient = _recipient;
         reviewTimeoutSeconds = _reviewTimeoutSeconds;
         campaignReviewer = _campaignReviewer;
-        milestoneManager = _milestoneManager;        
+        milestoneManager = _milestoneManager;
     }
 
     //== external
@@ -158,10 +158,10 @@ contract LPPCappedMilestone is AragonApp {
         require(!requestComplete);
 
         requestComplete = true;
-        MilestoneCompleteRequested(liquidPledging, idProject);        
-        
+        MilestoneCompleteRequested(liquidPledging, idProject);
+
         // start the review timeout
-        reviewTimeout = now + reviewTimeoutSeconds;    
+        reviewTimeout = now + reviewTimeoutSeconds;
     }
 
     // @notice The reviewer can reject a completion request from the milestone manager
@@ -169,12 +169,12 @@ contract LPPCappedMilestone is AragonApp {
     function rejectCompleteRequest() onlyReviewer external {
         require(!isCanceled());
 
-        // reset 
+        // reset
         completed = false;
         requestComplete = false;
         reviewTimeout = 0;
         MilestoneCompleteRequestRejected(liquidPledging, idProject);
-    }   
+    }
 
     // @notice The reviewer can approve a completion request from the milestone manager
     // When he does, the milestone's state is set to completed and the funds can be
@@ -183,7 +183,7 @@ contract LPPCappedMilestone is AragonApp {
         require(!isCanceled());
 
         completed = true;
-        MilestoneCompleteRequestApproved(liquidPledging, idProject);         
+        MilestoneCompleteRequestApproved(liquidPledging, idProject);
     }
 
     // @notice The reviewer and the milestone manager can cancel a milestone.
@@ -192,47 +192,47 @@ contract LPPCappedMilestone is AragonApp {
         require(!isCanceled());
 
         liquidPledging.cancelProject(idProject);
-    }    
+    }
 
     // @notice The reviewer can request changing a reviewer.
     function requestChangeReviewer(address _newReviewer) onlyReviewer external {
         newReviewer = _newReviewer;
 
-        MilestoneChangeReviewerRequested(liquidPledging, idProject, newReviewer);                 
-    }    
+        MilestoneChangeReviewerRequested(liquidPledging, idProject, newReviewer);
+    }
 
     // @notice The new reviewer needs to accept the request from the old
     // reviewer to become the new reviewer.
     // @dev There's no point in adding a rejectNewReviewer because as long as
-    // the new reviewer doesn't accept, the old reviewer remains the reviewer.    
+    // the new reviewer doesn't accept, the old reviewer remains the reviewer.
     function acceptNewReviewerRequest() external {
         require(newReviewer == msg.sender);
 
         reviewer = newReviewer;
         newReviewer = 0;
 
-        MilestoneReviewerChanged(liquidPledging, idProject, reviewer);         
-    }  
+        MilestoneReviewerChanged(liquidPledging, idProject, reviewer);
+    }
 
     // @notice The campaign reviewer can request changing a campaign reviewer.
     function requestChangeCampaignReviewer(address _newCampaignReviewer) onlyCampaignReviewer external {
         newCampaignReviewer = _newCampaignReviewer;
 
-        MilestoneChangeCampaignReviewerRequested(liquidPledging, idProject, newReviewer);                 
-    }    
+        MilestoneChangeCampaignReviewerRequested(liquidPledging, idProject, newReviewer);
+    }
 
     // @notice The new campaign reviewer needs to accept the request from the old
     // campaign reviewer to become the new campaign reviewer.
     // @dev There's no point in adding a rejectNewCampaignReviewer because as long as
-    // the new reviewer doesn't accept, the old reviewer remains the reviewer.    
+    // the new reviewer doesn't accept, the old reviewer remains the reviewer.
     function acceptNewCampaignReviewerRequest() external {
         require(newCampaignReviewer == msg.sender);
 
         campaignReviewer = newCampaignReviewer;
         newCampaignReviewer = 0;
 
-        MilestoneCampaignReviewerChanged(liquidPledging, idProject, reviewer);         
-    }  
+        MilestoneCampaignReviewerChanged(liquidPledging, idProject, reviewer);
+    }
 
     // @notice The recipient can request changing recipient.
     // @dev There's no point in adding a rejectNewRecipient because as long as
@@ -240,7 +240,7 @@ contract LPPCappedMilestone is AragonApp {
     function requestChangeRecipient(address _newRecipient) onlyReviewer external {
         newRecipient = _newRecipient;
 
-        MilestoneChangeRecipientRequested(liquidPledging, idProject, newRecipient);                 
+        MilestoneChangeRecipientRequested(liquidPledging, idProject, newRecipient);
     }
 
     // @notice The new recipient needs to accept the request from the old
@@ -251,9 +251,9 @@ contract LPPCappedMilestone is AragonApp {
         recipient = newRecipient;
         newRecipient = 0;
 
-        MilestoneRecipientChanged(liquidPledging, idProject, recipient);         
+        MilestoneRecipientChanged(liquidPledging, idProject, recipient);
 
-    }     
+    }
 
     /// @dev this is called by liquidPledging before every transfer to and from
     ///      a pledgeAdmin that has this contract as its plugin
@@ -268,7 +268,7 @@ contract LPPCappedMilestone is AragonApp {
     ) external returns (uint maxAllowed)
     {
         require(msg.sender == address(liquidPledging));
-        
+
         // only accept that token
         if (token != acceptedToken) {
             return 0;
@@ -384,7 +384,7 @@ contract LPPCappedMilestone is AragonApp {
 
         if (amount > 0) {
             bridge.withdraw(recipient, acceptedToken, amount);
-            PaymentCollected(liquidPledging, idProject);            
+            PaymentCollected(liquidPledging, idProject);
         }
     }
 }

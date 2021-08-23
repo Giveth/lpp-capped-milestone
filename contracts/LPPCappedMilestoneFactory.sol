@@ -4,8 +4,8 @@ import "./LPPCappedMilestone.sol";
 import "@aragon/os/contracts/factory/AppProxyFactory.sol";
 import "@aragon/os/contracts/kernel/Kernel.sol";
 import "@aragon/os/contracts/common/VaultRecoverable.sol";
-import "giveth-liquidpledging/contracts/LiquidPledging.sol";
-import "giveth-liquidpledging/contracts/LPConstants.sol";
+import "@giveth/liquidpledging-contract/contracts/LiquidPledging.sol";
+import "@giveth/liquidpledging-contract/contracts/LPConstants.sol";
 
 
 contract LPPCappedMilestoneFactory is LPConstants, VaultRecoverable, AppProxyFactory {
@@ -35,7 +35,7 @@ contract LPPCappedMilestoneFactory is LPConstants, VaultRecoverable, AppProxyFac
         address _campaignReviewer,
         address _milestoneManager,
         uint _maxAmount,
-        address _acceptedToken,        
+        address _acceptedToken,
         uint _reviewTimeoutSeconds
     ) public
     {
@@ -60,10 +60,10 @@ contract LPPCappedMilestoneFactory is LPConstants, VaultRecoverable, AppProxyFac
     }
 
     function _deployMilestone(
-        string _name, 
-        string _url, 
+        string _name,
+        string _url,
         uint64 _parentProject
-    ) internal returns(LiquidPledging liquidPledging, LPPCappedMilestone milestone, uint64 idProject) 
+    ) internal returns(LiquidPledging liquidPledging, LPPCappedMilestone milestone, uint64 idProject)
     {
         address milestoneBase = kernel.getApp(MILESTONE_APP);
         require(milestoneBase != 0);
@@ -80,6 +80,6 @@ contract LPPCappedMilestoneFactory is LPConstants, VaultRecoverable, AppProxyFac
             _parentProject,
             0,
             ILiquidPledgingPlugin(milestone)
-        );  
+        );
     }
 }

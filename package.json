@@ -1,6 +1,6 @@
 {
-  "name": "lpp-capped-milestone",
-  "version": "1.1.0",
+  "name": "@giveth/lpp-capped-milestone",
+  "version": "1.1.2",
   "description": "Contract for generating capped milestone with reviewer for liquidpledging.",
   "main": "index.js",
   "directories": {
@@ -17,6 +17,11 @@
     "type": "git",
     "url": "git+https://github.com/Giveth/lpp-capped-milestone.git"
   },
+  "files": [
+    "contracts",
+    "build/LPPCappedMilestoneFactory.json",
+    "build/LPPCappedMilestone.json"
+  ],
   "keywords": [
     "liquid",
     "pledging",
@@ -32,18 +37,21 @@
   "homepage": "https://github.com/Giveth/lpp-capped-milestones#readme",
   "dependencies": {
     "@aragon/os": "3.1.9",
-    "giveth-bridge": "1.0.4",
-    "giveth-liquidpledging": "1.0.0"
+    "@giveth/bridge-contract": "^1.0.6",
+    "@giveth/eth-contract-class": "^1.0.2",
+    "@giveth/liquidpledging-contract": "^1.0.1"
   },
   "devDependencies": {
+    "eslint-config-airbnb": "^15.0.1",
+    "eslint-plugin-import": "^2.6.0",
+    "eslint-plugin-jsx-a11y": "^6.0.2",
+    "eslint-plugin-react": "^7.1.0",
     "chai": "^4.1.2",
     "eslint": "^4.3.0",
-    "eth-contract-class": "0.0.12",
     "ganache-cli": "^6.1.2",
-    "lerna": "^2.2.0",
     "minimetoken": "^0.2.0",
     "solcpiler": "1.0.0-beta.8",
     "solium": "^1.0.9",
-    "web3": "1.0.0-beta.34"
+    "web3": "^1.5.2"
   }
 }
